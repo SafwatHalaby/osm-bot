@@ -80,9 +80,10 @@ function deg2rad(deg) {
 }
 
 var gStats = {
-	ddd: 0, ddx: 0, dxd: 0, dxx: 0, xdd: 0, xdx: 0, xxd: 0, xxx: 0,
-	update: 0, create: 0, del: 0, nothing: 0,
-	touched: 0, // create + update which actually did something
+	ddx_del: 0, ddx_nothing: 0, dxd_create: 0, dxx_update: 0, xdd_nothing: 0, xdx_delete: 0, xxd_create: 0, xxx_update: 0,
+	update: 0, update_touched: 0, update_not_touched: 0, update_distanceWarn: 0,
+	create: 0, del: 0, nothing: 0,
+	touched: 0, // create + del + update + which actually did something
 	total_newGTFS: 0,
 	total_oldGTFS: 0,
 	total_OsmBeforeRun: 0,
@@ -115,6 +116,7 @@ function main()
 	// The new_delta file has lines that are only present in the new database.
 	readFile_forEach("/home/osm/openStreetMap/gtfs/new/parsed.txt", function(line)
 	{
+	  gStats.total_newGTFS++;
 	  var newE = lineToGtfsEntry(line+"");
 	  var ref = newE["ref"];
 	  if (gtfs[ref] !== undefined)
@@ -130,6 +132,7 @@ function main()
 	// The old_delta file has lines that are only present in the new database.
 	readFile_forEach("/home/osm/openStreetMap/gtfs/old/parsed.txt", function(line)
 	{
+		gStats.total_oldGTFS++;
 		var oldE = lineToGtfsEntry(line);
 		var ref = oldE["ref"];
 		if (gtfs[ref] === undefined)
@@ -147,6 +150,8 @@ function main()
 	
 	var osm_ref = {};        // ref -> osmElement dictionary.
 	FATAL = initOsmRef(osm_ref, ds) || FATAL; // fills that dictionary. return false if some bus stops have the same ref.
+	
+
 	if (FATAL)
 	{
 		print("### Script canceled");
@@ -163,7 +168,6 @@ function main()
 			var stop = gtfs[ref];
 			
 			// - - -  => N/A
-			// - - X  => Nothing. 
 			if ((stop.oldEntry === null) && (stop.newEntry === null))
 			{
 				print("FATAL. this should never happen");
@@ -176,54 +180,83 @@ function main()
 			// ? ? -
 			if (match == null)
 			{
-				continue;
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
 					print("- X -: " + ref + ". Create.");
+					gStats.dxd_create++;
 					busStopCreate(ds, stop);
 				}
 				// X - -
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
 					print("X - -: " + ref + ". Nothing.");
+					gStats.xdd_nothing++;
+					gStats.nothing++;
 				}
 				// X X -
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
 					print("X X -: " + ref + ". Create.");
+					gStats.xxd_create++;
 					busStopCreate(ds, stop);
 				}
 			}
 			// ? ? X
 			else
-			{
-				//stop.osmElement.lat = 34;
-				//stop.osmElement.lon = 35;
-				stop.osmElement.pos = {lat: 34, lon: 35};
-				continue;
-				
+			{	
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
 					print("- X X: " + ref + ". Update. id: " + match.id);
+					gStats.dxx_update++;
 					busStopUpdate(stop);
-					cnt1++;
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
 					print("X - X: " + ref + ". Delete. id: " + match.id);
+					gStats.xdx_delete++;
 					busStopDelete(ds, stop);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
 					print("X X X: " + ref + ". Update. id: " + match.id);
+					gStats.xxx_update++;
 					busStopUpdate(stop);
-					cnt2++;
 				}
 			}
 		}
 	}
-	print("" + cnt1);
-	print("" + cnt2);
+	
+
+	// Whatever is left in osm_ref is // - - X
+	for (var ref in osm_ref)
+	{
+		if (osm_ref.hasOwnProperty(ref))
+		{
+			var el = osm_ref[ref];
+			if ((el.tags["source"] === "israel_gtfs") || (el.tags["source"] === "israel_gtfs_v1"))
+			{
+				gStats.ddx_del++;
+				print("- - X: " + ref + ". Delete (has source=gtfs). id: " + el.id);	
+				busStopDelete(ds, {osmElement: el});
+			}
+			else
+			{
+				print("- - X: " + ref + ". Nothing (doesn't have source=gtfs). id: " + el.id);	
+				gStats.ddx_nothing++;
+				gStats.nothing++;
+			}
+		}
+	}
+	
+	
+	for (var stat in gStats)
+	{
+		if (gStats.hasOwnProperty(stat))
+		{
+			print(stat + ": " + gStats[stat]);
+		}
+	}
+	performSanityChecks();
 	print("### Script finished");
 }
 
@@ -235,6 +268,7 @@ function initOsmRef(osm_ref, ds)
 			if (p.tags["highway"] !== "bus_stop") return;
 			var ref = p.tags["ref"];
 			if (ref === undefined) return;
+			gStats.total_OsmBeforeRun++;
 			if (osm_ref[ref] === undefined)
 			{
 				osm_ref[ref] = p;
@@ -245,20 +279,24 @@ function initOsmRef(osm_ref, ds)
 				print("FATAL: multiple bus stops with ref " + ref);
 			}			
 	});
-	
+	gStats.total_OsmAfterRun = gStats.total_OsmBeforeRun;
 	return FATAL;
 }
 
 function matchGtfEntryToAnOsmElement(osm_ref, stop)
 {
 		var entry = (stop.newEntry === null ? stop.oldEntry : stop.newEntry);
-		var matchingOsmElements;
 		var ref = entry["ref"];
 		var matchingOsmElement = osm_ref[ref];
 		if (matchingOsmElement === undefined)
+		{
 			return null;
-		
-		return matchingOsmElement;
+		}
+		else
+		{
+			delete osm_ref[ref];
+			return matchingOsmElement;
+		}
 }
 
 function setIfNotSet(osmNode, key, value)
@@ -276,26 +314,22 @@ function setIfNotSetAndChanged(key, stop)
 	{
 		var value = stop.newEntry[key];
 		if (stop.osmElement.tags[key] !== value)
+		{
 			stop.osmElement.tags[key] = value;
+			return true;
+		}
 	}
+	return false;
 }
-
-function setIfNotSetAndChangedCords(key, stop)
-{
-	if ((stop.oldEntry === null) || (stop.oldEntry[key] !== stop.newEntry[key]))
-	{
-		// var value = stop.newEntry[key];
-		/*
-		*/
-		stop.osmElement[key] = stop.newEntry[key];
-	}
-}
-
-
 
 function busStopUpdate(stop, isCreated)
 {
-	if (isCreated === undefined) isCreated = false;
+	
+	if (isCreated === undefined)
+	{
+		isCreated = false;
+		gStats.update++;
+	}
 	
 	if (!isCreated)
 	{
@@ -304,6 +338,8 @@ function busStopUpdate(stop, isCreated)
 		{
 			print("WARN: bus stop " + distance + "m from where it should be. Skipped. ref: " 
 				+ stop.osmElement.tags["ref"] + " id: " + stop.osmElement.id);
+			gStats.update_not_touched++;
+			gStats.update_distanceWarn++;
 			return false;
 		}
 	}
@@ -316,29 +352,29 @@ function busStopUpdate(stop, isCreated)
 	if (isCreated) return;
 	if ((stop.oldEntry === null) || (stop.oldEntry["lat"] !== stop.newEntry["lat"]) || (stop.oldEntry["lon"] !== stop.newEntry["lon"]))
 	{
-		/*if ((stop.osmElement.lat !== stop.newEntry.lat) || (stop.osmElement.lon !== stop.newEntry.lon))
-			stop.osmElement.pos = {lat: stop.newEntry.lat, lon: stop.newEntry.lon};*/
-			
-		/*if (stop.osmElement.lat !== stop.newEntry.lat)
+		if ((stop.osmElement.lat !== stop.newEntry.lat) || (stop.osmElement.lon !== stop.newEntry.lon))
 		{
-			stop.osmElement.lat = stop.newEntry.lat;
+			stop.osmElement.pos = {lat: stop.newEntry.lat, lon: stop.newEntry.lon};
 			touched = true;
 		}
-		if (stop.osmElement.lon !== stop.newEntry.lon)
-		{
-			stop.osmElement.lon = stop.newEntry.lon;
-			touched = true;
-		}*/
-		
-		stop.osmElement.lat = 34;
-		stop.osmElement.lon = 35;
 	}
 	
-	return touched;
+	if (touched)
+	{
+		gStats.update_touched++;
+		gStats.touched++;
+	}
+	else
+	{
+		gStats.update_not_touched++;
+	}
 }
 
 function busStopCreate(ds, stop)
 {
+	gStats.create++;
+	gStats.touched++;
+	gStats.total_OsmAfterRun++;
 	var nb = builder.NodeBuilder;
 	var node = nb.create({lat: stop.newEntry.lat, lon: stop.newEntry.lon});
 	ds.add(node);
@@ -349,9 +385,23 @@ function busStopCreate(ds, stop)
 
 function busStopDelete(ds, stop)
 {
+	gStats.del++;
+	gStats.touched++;
+	gStats.total_OsmAfterRun--;
 	ds.remove(stop.osmElement.id, stop.osmElement.type);
 }
 
+function performSanityChecks()
+{
+	var s = gStats;
+	if (s.ddx_del + s.xdx_delete != s.del) print("ASSERT FAIL - delete");
+	if (s.dxd_create + s.xxd_create != s.create) print("ASSERT FAIL - create");
+	if (s.dxx_update + s.xxx_update != s.update) print("ASSERT FAIL - update");
+	if (s.update_touched + s.create + s.del != s.touched) print("ASSERT FAIL - touches");
+	if (s.total_OsmBeforeRun + s.create - s.del != s.total_OsmAfterRun) print("ASSERT FAIL - beforeAfter" + s.total_OsmBeforeRun + "+" + s.create + "-" + s.del + "=" + s.total_OsmAfterRun);
+	if (s.ddx_nothing + s.xdd_nothing != s.nothing) print("ASSERT FAIL - nothing");
+	if (s.update_touched + s.update_not_touched != s.update) print("ASSERT FAIL - updateTouches");
+}
 
 main();
 

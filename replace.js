@@ -1,5 +1,5 @@
 /*
-Script page: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/nameCopy
+Script page: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/russianImportFix
 Last update: 17 Dec 2017
 Typical node fetching query (Overpass API):
 

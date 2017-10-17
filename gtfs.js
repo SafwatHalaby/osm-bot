@@ -61,7 +61,7 @@ function readFile_forEach(path, forEach)
 }
 
 // source https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
-function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
+function getDistanceFromLatLonInM(lat1,lon1,lat2,lon2) {
   var R = 6371; // Radius of the earth in km
   var dLat = deg2rad(lat2-lat1);  // deg2rad below
   var dLon = deg2rad(lon2-lon1); 
@@ -72,7 +72,7 @@ function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
     ; 
   var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
   var d = R * c; // Distance in km
-  return d;
+  return d * 1000;
 }
 
 function deg2rad(deg) {
@@ -81,7 +81,7 @@ function deg2rad(deg) {
 
 var gStats = {
 	ddx_del: 0, ddx_nothing: 0, dxd_create: 0, dxx_update: 0, xdd_nothing: 0, xdx_delete: 0, xxd_create: 0, xxx_update: 0,
-	update: 0, update_touched: 0, update_not_touched: 0, update_distanceWarn: 0,
+	update: 0, update_touched: 0, update_not_touched: 0, update_distanceTooFar_skipped: 0, update_distanceTooFar_ignored: 0,
 	create: 0, del: 0, nothing: 0,
 	touched: 0, // create + del + update + which actually did something
 	total_newGTFS: 0,
@@ -105,6 +105,7 @@ function main()
 		var gtfsEntry = {};
 		gtfsEntry["ref"] = arr[0].trim();         // stop_code
 		gtfsEntry["name"] = arr[1].trim();        // stop_name
+		gtfsEntry["name:he"] = gtfsEntry["name"]; // stop_name (he)
 		gtfsEntry["description"] = arr[2].replace(" רציף:   קומה:  ", "").trim(); // stop_desc
 		gtfsEntry["lat"] = Number(arr[3].trim()); // stop_lat
 		gtfsEntry["lon"] = Number(arr[4].trim()); // stop_lon
@@ -331,22 +332,39 @@ function busStopUpdate(stop, isCreated)
 		gStats.update++;
 	}
 	
-	if (!isCreated)
+	/*if (!isCreated)
 	{
-		var distance = getDistanceFromLatLonInKm(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon) * 1000;
+	* // These checks are probably useless on first run. There have been major changes since 2012. All "warnings" are expected to be false positives.
+		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon);
 		if (distance > 50)
 		{
-			print("WARN: bus stop " + distance + "m from where it should be. Skipped. ref: " 
-				+ stop.osmElement.tags["ref"] + " id: " + stop.osmElement.id);
-			gStats.update_not_touched++;
-			gStats.update_distanceWarn++;
-			return false;
+			// the bus stop is about to be moved more than 50 meters, something could be wrong
+			
+			if ((stop.oldEntry != null) && (getDistanceFromLatLonInM(stop.oldEntry.lat, stop.oldEntry.lon, stop.osmElement.lat, stop.osmElement.lon) < 20))
+			{
+				// The distance difference happened due to difference from the older database, continue
+				print("INFO: bus stop " + distance + "m from where it should be. Continued anyways. ref: " + stop.osmElement.tags["ref"] + " id: " + stop.osmElement.id);
+				stop.osmElement.tags["DEBUG111"] = "debug";
+				gStats.update_distanceTooFar_ignored++;
+			}
+			else
+			{
+				// The distance difference happened because a mapper moved this stop. The mapper and the GTFS DB disagree significantly. Warn!
+				print("WARN: bus stop " + distance + "m from where it should be. Skipped. ref: " 
+					+ stop.osmElement.tags["ref"] + " id: " + stop.osmElement.id);
+				gStats.update_not_touched++;
+				stop.osmElement.tags["DEBUG222"] = "debug";
+				gStats.update_distanceTooFar_skipped++;
+				return false;
+			}
 		}
-	}
+
+	}*/
 	
 	var touched = false;
 	touched = setIfNotSetAndChanged("ref", stop) || touched;
 	touched = setIfNotSetAndChanged("name",stop) || touched;
+	touched = setIfNotSetAndChanged("name:he",stop) || touched;
 	touched = setIfNotSetAndChanged("description", stop) || touched;
 	
 	if (isCreated) return;

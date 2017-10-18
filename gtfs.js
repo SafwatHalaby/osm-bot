@@ -103,7 +103,8 @@ function main()
 	print("");
 	print("### Running script");
 	
-	var gtfs = {}; // GTFS entries that need to be updated, created, or deleted in OSM.
+	var gtfs = {}; // Contains objects that look like this: {newEntry: <obj>, oldEntry: <obj>, osmElement: <obj>}
+	// Where newEntry is grabbed from the new GTFS, old from the old one, and osmElement from the dataset.
 	
 	function lineToGtfsEntry(line)
 	{
@@ -120,7 +121,7 @@ function main()
 	
 	var FATAL = false; // If true, fatal error. Abort.
 	
-	// The new_delta file has lines that are only present in the new database.
+	// Read lines from new DB, and fill "gtfs".
 	readFile_forEach("/home/osm/openStreetMap/gtfs/new/parsed.txt", function(line)
 	{
 	  gStats.total_newGTFS++;
@@ -136,7 +137,7 @@ function main()
 	});
 	
 
-	// The old_delta file has lines that are only present in the new database.
+	// Read lines from old DB, and fill "gtfs".
 	readFile_forEach("/home/osm/openStreetMap/gtfs/old/parsed.txt", function(line)
 	{
 		gStats.total_oldGTFS++;
@@ -165,9 +166,7 @@ function main()
 		return;
 	}
 	
-	// iterate all gtfs entries
-	var cnt1 = 0;
-	var cnt2 = 0;
+	// iterate all "gtfs" objects, decide what to do with each
 	for (var ref in gtfs)
 	{
 		if (gtfs.hasOwnProperty(ref))
@@ -181,7 +180,7 @@ function main()
 				return;
 			}
 			
-			var match = matchGtfEntryToAnOsmElement(osm_ref, stop);
+			var match = matchGtfEntryToAnOsmElement(osm_ref, stop); // whatever osmElement is returned is also removed from osm_ref
 			stop.osmElement = match;
 			
 			// ? ? -
@@ -255,7 +254,7 @@ function main()
 		}
 	}
 	
-	
+	// print stats
 	for (var stat in gStats)
 	{
 		if (gStats.hasOwnProperty(stat))
@@ -263,7 +262,10 @@ function main()
 			print(stat + ": " + gStats[stat]);
 		}
 	}
+
+	// sanity checks on the stats
 	performSanityChecks();
+
 	print("### Script finished");
 }
 
@@ -315,7 +317,7 @@ function setIfNotSet(osmNode, key, value)
 
 function setIfNotSetAndChanged(key, stop)
 {
-	// Only touch the values that have been. either changed between old db and new db
+	// Only touch the values that have been either changed between old db and new db
 	// 2. don't exist in old db.
 	if ((stop.oldEntry === null) || (stop.oldEntry[key] !== stop.newEntry[key]))
 	{
@@ -338,9 +340,10 @@ function busStopUpdate(stop, isCreated)
 		gStats.update++;
 	}
 	
+	// These checks are probably useless on first run. There have been major changes since 2012. Almost all "warnings" are expected to be false positives.
 	/*if (!isCreated)
 	{
-	* // These checks are probably useless on first run. There have been major changes since 2012. All "warnings" are expected to be false positives.
+	* 
 		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon);
 		if (distance > 50)
 		{
@@ -422,7 +425,8 @@ function performSanityChecks()
 	if (s.dxd_create + s.xxd_create != s.create) print("ASSERT FAIL - create");
 	if (s.dxx_update + s.xxx_update != s.update) print("ASSERT FAIL - update");
 	if (s.update_touched + s.create + s.del != s.touched) print("ASSERT FAIL - touches");
-	if (s.total_OsmBeforeRun + s.create - s.del != s.total_OsmAfterRun) print("ASSERT FAIL - beforeAfter" + s.total_OsmBeforeRun + "+" + s.create + "-" + s.del + "=" + s.total_OsmAfterRun);
+	if (s.total_OsmBeforeRun + s.create - s.del != s.total_OsmAfterRun) 
+		print("ASSERT FAIL - beforeAfter" + s.total_OsmBeforeRun + "+" + s.create + "-" + s.del + "=" + s.total_OsmAfterRun);
 	if (s.ddx_nothing + s.xdd_nothing != s.nothing) print("ASSERT FAIL - nothing");
 	if (s.update_touched + s.update_not_touched != s.update) print("ASSERT FAIL - updateTouches");
 }

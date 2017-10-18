@@ -81,13 +81,18 @@ function deg2rad(deg) {
 
 var gStats = {
 	ddx_del: 0, ddx_nothing: 0, dxd_create: 0, dxx_update: 0, xdd_nothing: 0, xdx_delete: 0, xxd_create: 0, xxx_update: 0,
-	update: 0, update_touched: 0, update_not_touched: 0, update_distanceTooFar_skipped: 0, update_distanceTooFar_ignored: 0,
-	create: 0, del: 0, nothing: 0,
-	touched: 0, // create + del + update + which actually did something
-	total_newGTFS: 0,
-	total_oldGTFS: 0,
-	total_OsmBeforeRun: 0,
-	total_OsmAfterRun: 0
+	update: 0, update_touched: 0      /* Total updates that actually changed something */,
+	update_not_touched: 0,            /* Total bus stop update attempts that didn't need to change any tags */
+	update_distanceTooFar_skipped: 0, /* Total updates that were skipped because the position changed significantly */
+	update_distanceTooFar_ignored: 0, /* Total updates that were done despite the position changing significantly */
+	create: 0,                        /* Total created stops (dxd_create+xxd_create) */
+	del: 0,                           /* Total deleted stops (ddx_del+xdx_delete) */
+	nothing: 0,                       /* Total stops where no action was taken (xdd_nothing+ddx_nothing) */
+	touched: 0,                       /* create + del + update + update_touched */
+	total_newGTFS: 0,                 /* total bus stop lines in the new GTFS file */
+	total_oldGTFS: 0,                 /* total bus stop lines in the old GTFS file */
+	total_OsmBeforeRun: 0,            /* Total "ref" carrying stops in Israel, prior to the run */
+	total_OsmAfterRun: 0              /* Total "ref" carrying stops in Israel, after the run (total_OsmBeforeRun+created-deleted) */ 
 }
 
 function main()

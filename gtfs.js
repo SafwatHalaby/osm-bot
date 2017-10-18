@@ -103,7 +103,7 @@ function main()
 	print("");
 	print("### Running script");
 	
-	var gtfs = {}; // Contains objects that look like this: {newEntry: <obj>, oldEntry: <obj>, osmElement: <obj>}
+	var gtfs = {}; // Contains "stop" objects that look like this: {newEntry: <obj>, oldEntry: <obj>, osmElement: <obj>}
 	// Where newEntry is grabbed from the new GTFS, old from the old one, and osmElement from the dataset.
 	
 	function lineToGtfsEntry(line)
@@ -166,12 +166,12 @@ function main()
 		return;
 	}
 	
-	// iterate all "gtfs" objects, decide what to do with each
+	// iterate all "gtfs" objects, decide what to do with each. 
 	for (var ref in gtfs)
 	{
-		if (gtfs.hasOwnProperty(ref))
+		if (gtfs.hasOwnProperty(ref)) 
 		{
-			var stop = gtfs[ref];
+			var stop = gtfs[ref]; // {newEntry: <obj or null>, oldEntry: <obj or null>, osmElement: null (filled below)}
 			
 			// - - -  => N/A
 			if ((stop.oldEntry === null) && (stop.newEntry === null))
@@ -180,7 +180,8 @@ function main()
 				return;
 			}
 			
-			var match = matchGtfEntryToAnOsmElement(osm_ref, stop); // whatever osmElement is returned is also removed from osm_ref
+			// Fill stop.osmElement. whatever element is returned is also removed from osm_ref
+			var match = matchGtfEntryToAnOsmElement(osm_ref, stop); 
 			stop.osmElement = match;
 			
 			// ? ? -

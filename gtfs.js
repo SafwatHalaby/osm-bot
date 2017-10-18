@@ -81,7 +81,8 @@ function deg2rad(deg) {
 
 var gStats = {
 	ddx_del: 0, ddx_nothing: 0, dxd_create: 0, dxx_update: 0, xdd_nothing: 0, xdx_delete: 0, xxd_create: 0, xxx_update: 0,
-	update: 0, update_touched: 0      /* Total updates that actually changed something */,
+	update: 0,                        /* Total updates (update_touched + update_not_touched) */
+	update_touched: 0                 /* Total updates that actually changed something */,
 	update_not_touched: 0,            /* Total bus stop update attempts that didn't need to change any tags */
 	update_distanceTooFar_skipped: 0, /* Total updates that were skipped because the position changed significantly */
 	update_distanceTooFar_ignored: 0, /* Total updates that were done despite the position changing significantly */

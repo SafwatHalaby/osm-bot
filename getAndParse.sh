@@ -1,5 +1,9 @@
 cd /home/osm/openStreetMap/gtfs
 
+# Grabs a new stops.txt from the mot site and parses it, setting the
+# stage from gtfs.js to compare old/parsed.txt and new/parsed.txt, and
+# then incrementally update the bus stops in Israel.
+
 mv old old_backup
 mv new old
 mkdir new

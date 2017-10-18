@@ -45,6 +45,7 @@ X X X  => Update.
 
 Updating  only updates the keys where col1[key] != col2[key].
 */
+DB_DIR = "/home/osm/openStreetMap/gtfs/";
 
 function readFile_forEach(path, forEach)
 {
@@ -123,7 +124,7 @@ function main()
 	var FATAL = false; // If true, fatal error. Abort.
 	
 	// Read lines from new DB, and fill "gtfs".
-	readFile_forEach("/home/osm/openStreetMap/gtfs/new/parsed.txt", function(line)
+	readFile_forEach(DB_DIR+"/new/parsed.txt", function(line)
 	{
 	  gStats.total_newGTFS++;
 	  var newE = lineToGtfsEntry(line+"");
@@ -139,7 +140,7 @@ function main()
 	
 
 	// Read lines from old DB, and fill "gtfs".
-	readFile_forEach("/home/osm/openStreetMap/gtfs/old/parsed.txt", function(line)
+	readFile_forEach(B_DIR+"/old/parsed.txt", function(line)
 	{
 		gStats.total_oldGTFS++;
 		var oldE = lineToGtfsEntry(line);

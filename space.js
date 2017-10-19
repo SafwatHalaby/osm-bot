@@ -10,19 +10,22 @@ var command = require("josm/command");
 // Simply modify filter(p), compare(p1, p2), gCellSize_meters, and perhaps gStats for statistics.
 
 // Algorithm complexity:
-// The spacial algorithm divides the region into cells/buckets that are "gCellSize_meters" large, and puts each element in its corresponding bucket.
-// Afterwards, elements are only compared with elements in their own bucket, or in adjacent buckets. This makes the approx algorithm O(N), assumming
-// unform distribution without too many elements in each bucket. It's far better than the slow O(N^2) of naively comparing every element in the
-// dataset with every other element. If all elements are in the same cell/bucket, this algorithm will run in a slow worst case of O(N^2)
-// A cell/bucket is gCellSize_meters x gCellSize_meters large.
-// Enlarging gCellSize_meters will reduce memory usage but increase CPU usage, and vice-versa.
+// The spacial algorithm divides the region into cells/buckets that are "gCellSize_meters" large, and puts
+//each element in its corresponding bucket. Afterwards, elements are only compared with elements in their
+// own bucket, or in adjacent buckets. This makes the approx algorithm O(N), assumming uniform distribution
+// without too many elements in each bucket. It's far better than the slow O(N^2) of naively comparing every
+// element in the dataset with every other element. If all elements are in the same cell/bucket, this
+// algorithm will run in a slow worst case of O(N^2). A cell/bucket is gCellSize_meters x gCellSize_meters
+// large. Enlarging gCellSize_meters will reduce memory usage but increase CPU usage, and vice-versa.
 // gCellSize_meters must be at least as large as the maximum distance you want to compare. In other words, 
-// two elements that are farther than gCellSize_meters are not guaranteed to be compared and compare(p1, p2) may not be called on them.
+// two elements that are farther than gCellSize_meters are not guaranteed to be compared and compare(p1, p2)
+// may not be called on them.
 
 var gCellSize_meters = 100;
  
-// First, this function is called for the entire dataset, return "true" for the elements that are interesting to you
-// return false for anything you want to ignore. The more you ignore, the faster the algorithm runs.
+// First, this function is called for the entire dataset, return "true" for the elements that
+// are interesting to you return false for anything you want to ignore.
+// The more you ignore, the faster the algorithm runs.
 function filter(p)
 {
 	if (p.tags["highway"] === "bus_stop")

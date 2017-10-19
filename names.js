@@ -126,81 +126,10 @@ var languages = [
 {name: "Arabic", tag: "name:ar", check: arEnOnly, checkStrict: arOnly, stats: {toName: 0, fromName: 0}}
 ];
 
-var api = require("josm/api").Api;
-function traceAndFixMismatch(p, name, nameLang, lang)
-{
-	return false; // Disabled. Currently no tag overriding is done in order to autofix name mismatches.
-	var type;
-	if (p.isNode) type="node";
-	else if (p.isWay) type="way";
-	else if (p.isRelation) type="relation";
-	var id = p.id;
-	
-	print("");
-	print("### Autofix attempt. v: " + p.version + ", id: " + id + ", type: " + type);
-	print (name + " - " + nameLang);
-	print("");
-
-	var versions = {};
-	function getVersion(id, v)
-	{
-		if (versions[v] === undefined)
-		{
-			print("-- Downloading version " + v + " for id " + id + " of type " + type);
-			versions[v] = api.downloadObject({id: id, type: type}, {version: Number(v)}).get(id, type);
-			print (versions[v].version + " is different from " + v);
-		}
-
-		return versions[v];
-	}
-
-
-	var fixed = false;
-	// attempt to figure out which is newer: name or name:lang.
-	for (var version = p.version - 1; version > 0; --version)
-	{
-		var oldTags = getVersion(id, version).tags;
-		var oldName = oldTags["name"];
-		var oldNameLang = oldTags[lang.tag];
-		print (oldName + " - " + oldNameLang);
-
-
-		if ((name == oldName) && (nameLang != oldNameLang))
-		{
-			// nameLang is newer
-			p.tags['name'] = nameLang;
-			print("autofixed: name=" + nameLang + "(id " + id + ")");
-			return true;
-		}
-
-		if ((name != oldName) && (nameLang == oldNameLang))
-		{
-			// name is newer
-			p.tags[lang.tag] = name;
-			print("autofixed: "+lang.tag+"=" + name + "(id " + id + ")");
-			return true;
-		}
-
-		if ((name != oldName) && (nameLang != oldNameLang))
-		{
-			// both names changed, cannot autofix.
-			break;
-		}
-	
-		//if we're here it means:  ((name = oldName) && (nameLang = oldNameLang))
-		// keep searching.
-	}
-	print("autofix Failed for " + id);
-	return false;	
-}
-
 function main()
 {
 	var modifiedCnt = 0;
 	var totalCnt = 0;
-	var autoFixSuccess = 0;
-	var autoFixFail = 0;
-	var autoFixAttempts = 0;
 	print("");
 	print("### Running script");
 	var layer = josm.layers.get(0);
@@ -311,12 +240,6 @@ function main()
 							p2.tags.fixme = str;
 						else
 							p2.tags.fixme += ". " + str;
-						/*
-						autoFixAttempts++;
-						if (traceAndFixMismatch(p, name, nameLang, lang)) //disabled, always returns false.
-							autoFixSuccess++;
-						else
-							autoFixFail++;*/
 					}
 					return;
 				}

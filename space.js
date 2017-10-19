@@ -55,7 +55,7 @@ function compare(p1, p2)
 				{
 					gStats.manual++;
 					print(p2.id + " requires manual check/merge. Compare it with " + p1.id + " (" + dist + "m)");
-					var str = "Suspected duplicate stop. Flagged by SafwatHalaby_bot";
+					var str = "Suspected duplicate stop. Flagged by SafwatHalaby_bot#busMerge";
 					if (p2.tags.fixme === undefined)
 						p2.tags.fixme = str;
 					else

@@ -304,12 +304,19 @@ function main()
 					}
 					else if (!sameValue(nameLang, name)) // normalized string comparison, ignoring spaces etc
 					{
-						printErr(p, "name, " + lang.tag + " mismatch.");
+						var str = "name, " + lang.tag + " mismatch.";
+						printErr(p, str);
+						str += " Flagged by SafwatHalaby_bot#nameCopy";
+						if (p2.tags.fixme === undefined)
+							p2.tags.fixme = str;
+						else
+							p2.tags.fixme += ". " + str;
+						/*
 						autoFixAttempts++;
 						if (traceAndFixMismatch(p, name, nameLang, lang)) //disabled, always returns false.
 							autoFixSuccess++;
 						else
-							autoFixFail++;
+							autoFixFail++;*/
 					}
 					return;
 				}

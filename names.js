@@ -77,7 +77,8 @@ function arOnly(str)
 
 function enOnly(str)
 {
-	return (str.search(/[^\u00A0\u0020-\u007E]/) === -1);
+	return (str.search(/[^\u00A0\u0020-\u007E]/) === -1) && // Only contains ascii symbols
+	(str.search(/[a-zA-Z]/) !== -1); // contains at least 1 English letter
 }
 
 function hasInvalidChars(str)
@@ -173,6 +174,12 @@ function main()
 			}
 		}
 
+		if ((name === p.tags["name:en"]) && (!enOnly(p.tags["name:en"])))
+		{
+			// remove bug in previous version, where ascii sentences with no letters at all were copied to name:en
+			p.removeTag("name:en");
+		}
+		
 		if (name === undefined) // *_to_name
 		{
 

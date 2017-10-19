@@ -11,8 +11,8 @@ var command = require("josm/command");
 
 // Algorithm complexity:
 // The spacial algorithm divides the region into cells/buckets that are "gCellSize_meters" large, and puts
-//each element in its corresponding bucket. Afterwards, elements are only compared with elements in their
-// own bucket, or in adjacent buckets. This makes the approx algorithm O(N), assumming uniform distribution
+// each element in its corresponding bucket. Afterwards, elements are only compared with elements in their
+// own bucket, or in adjacent buckets. This makes the complexity approx O(N), assumming uniform distribution
 // without too many elements in each bucket. It's far better than the slow O(N^2) of naively comparing every
 // element in the dataset with every other element. If all elements are in the same cell/bucket, this
 // algorithm will run in a slow worst case of O(N^2). A cell/bucket is gCellSize_meters x gCellSize_meters

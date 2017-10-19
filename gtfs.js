@@ -1,6 +1,13 @@
 var print = require("josm/util").println;
 var builder= require("josm/builder");
+var layer = josm.layers.get(0);
+var ds = layer.data;
+var command = require("josm/command");
 
+function printV(str)
+{
+	//print(str);
+}
 /*
 WORK IN PROGRESS 
 
@@ -46,6 +53,11 @@ X X X  => Update.
 Updating  only updates the keys where col1[key] != col2[key].
 */
 DB_DIR = "/home/osm/openStreetMap/gtfs/";
+
+function del(p)
+{
+	layer.apply(command.delete(p));
+}
 
 function readFile_forEach(path, forEach)
 {
@@ -100,8 +112,6 @@ var gStats = {
 
 function main()
 {
-	var ds = josm.layers.get(0).data;
-	
 	print("");
 	print("### Running script");
 	
@@ -126,7 +136,6 @@ function main()
 	// Read lines from new DB, and fill "gtfs".
 	readFile_forEach(DB_DIR+"/new/parsed.txt", function(line)
 	{
-	  gStats.total_newGTFS++;
 	  var newE = lineToGtfsEntry(line+"");
 	  var ref = newE["ref"];
 	  if (gtfs[ref] !== undefined)
@@ -135,14 +144,14 @@ function main()
 			print("FATAL: Two gtfs entries with same ref in new db: " + ref);
 			FATAL = true;
 	  }
+	  gStats.total_newGTFS++;
 	  gtfs[ref] = {newEntry: newE, oldEntry: null, osmElement: null};
 	});
 	
 
 	// Read lines from old DB, and fill "gtfs".
-	readFile_forEach(B_DIR+"/old/parsed.txt", function(line)
+	readFile_forEach(DB_DIR+"/old/parsed.txt", function(line)
 	{
-		gStats.total_oldGTFS++;
 		var oldE = lineToGtfsEntry(line);
 		var ref = oldE["ref"];
 		if (gtfs[ref] === undefined)
@@ -155,6 +164,7 @@ function main()
 			print("FATAL: Two gtfs entries with same ref in old db: " + ref);
 			FATAL = true;
 		}
+		gStats.total_oldGTFS++;
 		gtfs[ref].oldEntry = oldE;
 	});
 	
@@ -191,23 +201,23 @@ function main()
 			{
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
-					print("- X -: " + ref + ". Create.");
+					printV("- X -: " + ref + ". Create.");
 					gStats.dxd_create++;
-					busStopCreate(ds, stop);
+					busStopCreate(stop);
 				}
 				// X - -
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
-					print("X - -: " + ref + ". Nothing.");
+					printV("X - -: " + ref + ". Nothing.");
 					gStats.xdd_nothing++;
 					gStats.nothing++;
 				}
 				// X X -
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
-					print("X X -: " + ref + ". Create.");
+					printV("X X -: " + ref + ". Create.");
 					gStats.xxd_create++;
-					busStopCreate(ds, stop);
+					busStopCreate(stop);
 				}
 			}
 			// ? ? X
@@ -215,19 +225,19 @@ function main()
 			{	
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
-					print("- X X: " + ref + ". Update. id: " + match.id);
+					printV("- X X: " + ref + ". Update. id: " + match.id);
 					gStats.dxx_update++;
 					busStopUpdate(stop);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
-					print("X - X: " + ref + ". Delete. id: " + match.id);
+					printV("X - X: " + ref + ". Delete. id: " + match.id);
 					gStats.xdx_delete++;
-					busStopDelete(ds, stop);
+					busStopDelete(stop);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
-					print("X X X: " + ref + ". Update. id: " + match.id);
+					printV("X X X: " + ref + ". Update. id: " + match.id);
 					gStats.xxx_update++;
 					busStopUpdate(stop);
 				}
@@ -245,13 +255,14 @@ function main()
 			if ((el.tags["source"] === "israel_gtfs") || (el.tags["source"] === "israel_gtfs_v1"))
 			{
 				gStats.ddx_del++;
-				print("- - X: " + ref + ". Delete (has source=gtfs). id: " + el.id);	
-				busStopDelete(ds, {osmElement: el});
+				printV("- - X: " + ref + ". Delete (has source=gtfs). id: " + el.id);	
+				busStopDelete({osmElement: el});
 			}
 			else
 			{
-				print("- - X: " + ref + ". Nothing (doesn't have source=gtfs). id: " + el.id);	
+				print("INFO: - - X: " + ref + ". Nothing (doesn't have source=gtfs). id: " + el.id);	
 				gStats.ddx_nothing++;
+				el.tags["DEBUG"] = "bot";
 				gStats.nothing++;
 			}
 		}
@@ -331,6 +342,14 @@ function setIfNotSetAndChanged(key, stop)
 			return true;
 		}
 	}
+	else if ((stop.oldEntry !== null) && (stop.oldEntry[key] !== stop.newEntry[key]) && (stop.newEntry[key] !== stop.osmElement.tags[key]))
+	{
+		print("INFO: Kept user value for ref=" + stop.osmElement.ref + 
+		": key=" + key +
+		", old=" + stop.oldEntry[key] + 
+		", new=" + stop.newEntry[key] +
+		", user=" + stop.osmElement.tags[key]);
+	}
 	return false;
 }
 
@@ -400,7 +419,7 @@ function busStopUpdate(stop, isCreated)
 	}
 }
 
-function busStopCreate(ds, stop)
+function busStopCreate(stop)
 {
 	gStats.create++;
 	gStats.touched++;
@@ -413,12 +432,12 @@ function busStopCreate(ds, stop)
 	busStopUpdate(stop, true);
 }
 
-function busStopDelete(ds, stop)
+function busStopDelete(stop)
 {
 	gStats.del++;
 	gStats.touched++;
 	gStats.total_OsmAfterRun--;
-	ds.remove(stop.osmElement.id, stop.osmElement.type);
+	del(stop.osmElement);
 }
 
 function performSanityChecks()

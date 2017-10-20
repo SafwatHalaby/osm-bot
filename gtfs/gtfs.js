@@ -81,10 +81,11 @@ var gStats = {
 	del: 0,                           /* Total deleted stops (ddx_del+xdx_delete) */
 	nothing: 0,                       /* Total stops where no action was taken (xdd_nothing+ddx_nothing) */
 	touched: 0,                       /* create + del + update_touched */
-	total_newGTFS: 0,                 /* total bus stop lines in the new GTFS file */
+	total_newGTFS: 0,                 /* total bus stop lines in the new GTFS file. */
 	total_oldGTFS: 0,                 /* total bus stop lines in the old GTFS file */
 	total_OsmBeforeRun: 0,            /* Total "ref" carrying stops in Israel, prior to the run */
 	total_OsmAfterRun: 0              /* Total "ref" carrying stops in Israel, after the run (total_OsmBeforeRun+created-deleted) */ 
+	//note: total_OsmAfterRun = total_newGTFS + ddx_nothing (ref carrying stops that aren't from gtfs DB)
 }
 
 function main()
@@ -428,6 +429,7 @@ function performSanityChecks()
 		print("ASSERT FAIL - beforeAfter" + s.total_OsmBeforeRun + "+" + s.create + "-" + s.del + "=" + s.total_OsmAfterRun);
 	if (s.ddx_nothing + s.xdd_nothing != s.nothing) print("ASSERT FAIL - nothing");
 	if (s.update_touched + s.update_not_touched != s.update) print("ASSERT FAIL - updateTouches");
+	if (s.total_newGTFS + s.ddx_nothing != s.total_OsmAfterRun) print("ASSERT FAIL - finalBusStopSum");
 }
 
 main();

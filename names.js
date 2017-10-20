@@ -114,6 +114,7 @@ var languages = [
 {name: "Arabic", tag: "name:ar", check: arEnOnly, copyCnt: 0}
 ];
 
+var fixmeCnt = 0;
 function addFixme(p, str)
 {
 	str += " Flagged by SafwatHalaby_bot-nameCopy";
@@ -129,7 +130,6 @@ function main()
 {
 	var modifiedCnt = 0;
 	var totalCnt = 0;
-	var fixmeCnt = 0;
 	var engFixCnt = 0;
 	print("");
 	print("### Running script");
@@ -220,7 +220,7 @@ function main()
 	{
 		var lang = languages[i];
 		print("Total name to " + lang.tag + ": " + lang.copyCnt);
-		checksum += lang.stats.toName + lang.copyCnt;
+		checksum += lang.copyCnt;
 	}
 	print("Whitespace fixes: " + gWhiteSpaceFixes);
 	print("Total scanned: " + totalCnt);

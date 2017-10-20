@@ -18,3 +18,9 @@ getAndParse.sh: Downloads newer gtfs files, and parses them in
 space.js: A helper script, which removes duplicate bus stops and flags
           suspect duplicates. It can be modified to perform other spacial
           tasks unrelated to GTFS. Should be run after gtfs.js.
+gtfs_bootstrap.js: Can derive a gtfs file from an OSM dataset.
+                   If someone else imported bus stops to your country years
+                   ago, and the file used for import is lost, this can
+                   be used to recreate it, allowing gtfs.js to work properly.
+                   Alternatively, gtfs.js can be bootstrapped with a blank
+                   old/parsed.txt.

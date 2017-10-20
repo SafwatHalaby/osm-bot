@@ -21,6 +21,8 @@ space.js: A helper script, which removes duplicate bus stops and flags
 gtfs_bootstrap.js: Can derive a gtfs file from an OSM dataset.
                    If someone else imported bus stops to your country years
                    ago, and the file used for import is lost, this can
-                   be used to recreate it, allowing gtfs.js to work properly.
+                   be used to recreate it by downloading the old import
+                   changeset, and feeding it to gtfs_bootstrap.js to create
+                   old/parsed.txt, allowing gtfs.js to work properly.
                    Alternatively, gtfs.js can be bootstrapped with a blank
                    old/parsed.txt.

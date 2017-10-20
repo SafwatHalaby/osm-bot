@@ -1,6 +1,7 @@
 /*
 Script page: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/nameCopy
-Last update: 17 Dec 2017
+Last update: 20 Dec 2017
+major version: 5
 Typical node fetching query (Overpass API):
 
 [out:xml][timeout:200][bbox:29.5734571,34.1674805,33.4131022,35.925293];
@@ -12,8 +13,6 @@ Typical node fetching query (Overpass API):
 		t["name"] != t["name:en"] &&
 		t["name"] != t["name:ru"]
 	)(area.a);
-	node[!"name"]["name:ar"][!"name:he"][!"name:en"][!"name:ru"](area.a);
-	node[!"name"][!"name:ar"]["name:he"][!"name:en"][!"name:ru"](area.a);
 
 	way["name"](if:
 		t["name"] != t["name:ar"] &&
@@ -21,8 +20,6 @@ Typical node fetching query (Overpass API):
 		t["name"] != t["name:en"] &&
 		t["name"] != t["name:ru"]
 	)(area.a);
-	way[!"name"]["name:ar"][!"name:he"][!"name:en"][!"name:ru"](area.a);
-	way[!"name"][!"name:ar"]["name:he"][!"name:en"][!"name:ru"](area.a);
 
 	rel["name"](if:
 		t["name"] != t["name:ar"] &&
@@ -30,8 +27,6 @@ Typical node fetching query (Overpass API):
 		t["name"] != t["name:en"] &&
 		t["name"] != t["name:ru"]
 	)(area.a);
-	rel[!"name"]["name:ar"][!"name:he"][!"name:en"][!"name:ru"](area.a);
-	rel[!"name"][!"name:ar"]["name:he"][!"name:en"][!"name:ru"](area.a);
 );
 out meta;
 */
@@ -57,28 +52,20 @@ var remove;
 // 00A0 is non breaking space
 function heEnOnly(str)
 {
-	return (str.search(/[^\u00A0\u0020-\u007E\u0590-\u05FF]/) === -1);
+	return ((str.search(/[^\u00A0\u0020-\u007E\u0590-\u05FF]/) === -1)  // only common symbols and ar letters
+	&& (str.search(/[\u0590-\u05FF]/) !== -1)); // at least 1 he letter
 }
 
 function arEnOnly(str)
 {
-	return (str.search(/[^\u00A0\u0020-\u007E\u0600-\u06FF]/) === -1);
-}
-
-function heOnly(str)
-{
-	return (str.search(/[^\u00A0\u0020-\u007E\u0590-\u05FF]/) === -1);
-}
-
-function arOnly(str)
-{
-	return (str.search(/[^\u00A0\u0020-\u007E\u0600-\u06FF]/) === -1);
+	return ((str.search(/[^\u00A0\u0020-\u007E\u0600-\u06FF]/) === -1)  // only common symbols and ar letters
+	&& (str.search(/[\u0600-\u06FF]/) !== -1)); // at least 1 ar letter
 }
 
 function enOnly(str)
 {
-	return (str.search(/[^\u00A0\u0020-\u007E]/) === -1) && // Only contains ascii symbols
-	(str.search(/[a-zA-Z]/) !== -1); // contains at least 1 English letter
+	return (str.search(/[^\u00A0\u0020-\u007E]/) === -1) && // Only common symbols and en letters
+	(str.search(/[a-zA-Z]/) !== -1); // at least 1 en letter
 }
 
 function hasInvalidChars(str)
@@ -122,15 +109,28 @@ function fixWhiteSpace(p)
 
 
 var languages = [
-{name: "English", tag: "name:en", check: enOnly, checkStrict: enOnly, stats: {toName: 0, fromName: 0}},
-{name: "Hebrew", tag: "name:he", check: heEnOnly, checkStrict: heOnly, stats: {toName: 0, fromName: 0}},
-{name: "Arabic", tag: "name:ar", check: arEnOnly, checkStrict: arOnly, stats: {toName: 0, fromName: 0}}
+{name: "English", tag: "name:en", check: enOnly, copyCnt: 0},
+{name: "Hebrew", tag: "name:he", check: heEnOnly, copyCnt: 0},
+{name: "Arabic", tag: "name:ar", check: arEnOnly, copyCnt: 0}
 ];
+
+function addFixme(p, str)
+{
+	str += " Flagged by SafwatHalaby_bot-nameCopy";
+	if (p.tags.fixme === undefined)
+		p.tags.fixme = str;
+	else
+		p.tags.fixme += ". " + str;
+		
+	fixmeCnt++;
+}
 
 function main()
 {
 	var modifiedCnt = 0;
 	var totalCnt = 0;
+	var fixmeCnt = 0;
+	var engFixCnt = 0;
 	print("");
 	print("### Running script");
 	var layer = josm.layers.get(0);
@@ -139,7 +139,6 @@ function main()
 	{
 		totalCnt++;
 		var name = p.tags["name"];
-		var blackList = {};
 
 		// Basic whitespace fixes for all keys and not just name keys
 		fixWhiteSpace(p);
@@ -154,6 +153,13 @@ function main()
 			}
 		}
 
+		if ((p.tags["name:en"] !== undefined) && (name === p.tags["name:en"]) && (!enOnly(p.tags["name:en"])))
+		{
+			// remove bug in previous version, where ascii sentences with no letters at all were copied to name:en
+			p.removeTag("name:en");
+			engFixCnt++;
+		}
+		
 		// check ar,he,en integrity
 		for (var i = 0; i < languages.length; ++i)
 		{
@@ -164,60 +170,15 @@ function main()
 				if(hasInvalidChars(nameLang))
 				{
 					printErr(p, lang.tag + ' has invalid characters.');
-					blackList[lang.tag] = true;
 				}
 				else if (!lang.check(nameLang))
 				{
 					printErr(p, lang.tag + ' is not ' + lang.name + '.');
-					blackList[lang.tag] = true;
 				}	
 			}
 		}
-
-		if ((name === p.tags["name:en"]) && (!enOnly(p.tags["name:en"])))
-		{
-			// remove bug in previous version, where ascii sentences with no letters at all were copied to name:en
-			p.removeTag("name:en");
-		}
 		
-		if (name === undefined) // *_to_name
-		{
-
-			var langCount = 0;
-			for (key in p.tags) 
-			{
-				if (key.indexOf("name:") != -1) 
-				{
-					if (++langCount == 2) break; // Optimization. no point in counting more than 2
-				}
-			}
-			if (langCount == 0) return; // No name tags at all.
-
-			// if (p.tags["noname"] !== undefined) remove(p, "noname");
-
-			if (langCount > 1)
-			{
-				printErr(p, 'Has no name tag, has multiple name:lang');	
-				return;
-			}
-			
-			// langCount = 1
-			// note I = 1, preventing name:en => name.
-			for (var i = 1; i < languages.length; ++i)
-			{
-				var lang = languages[i];
-				if (blackList[lang.tag] === true) continue;
-				var nameLang = p.tags[lang.tag];
-				if (nameLang !== undefined) // considering name:lang => name
-				{
-					p.tags["name"] = nameLang;
-					modifiedCnt++;
-					lang.stats.toName++;
-					return;
-				}
-			}
-		}
-		else // name exists, consider name_to_*
+		if (name !== undefined) // name exists, consider name_to_*
 		{
 			if (p.tags["noname"] !== undefined) remove(p, "noname");
 
@@ -236,17 +197,13 @@ function main()
 					{
 						p.tags[lang.tag] = name;
 						modifiedCnt++;
-						lang.stats.fromName++;
+						lang.copyCnt++;
 					}
 					else if (!sameValue(nameLang, name)) // normalized string comparison, ignoring spaces etc
 					{
 						var str = "name, " + lang.tag + " mismatch.";
 						printErr(p, str);
-						str += " Flagged by SafwatHalaby_bot#nameCopy";
-						if (p2.tags.fixme === undefined)
-							p2.tags.fixme = str;
-						else
-							p2.tags.fixme += ". " + str;
+						addFixme(p, str);
 					}
 					return;
 				}
@@ -256,21 +213,18 @@ function main()
 	});
 	print("");
 	print("Total names copies: " + modifiedCnt);
+	print("Total fixmes: " + fixmeCnt);
+	print("Eng bugfixes: " + engFixCnt);
 	var checksum = 0;
 	for (var i = 0; i < languages.length; ++i)
 	{
 		var lang = languages[i];
-		if (i != 0) // no need to print en to name, since it's always 0.
-			print("Total " + lang.tag + " to name: " + lang.stats.toName);
-		print("Total name to " + lang.tag + ": " + lang.stats.fromName);
-		checksum += lang.stats.toName + lang.stats.fromName;
+		print("Total name to " + lang.tag + ": " + lang.copyCnt);
+		checksum += lang.stats.toName + lang.copyCnt;
 	}
 	print("Whitespace fixes: " + gWhiteSpaceFixes);
 	print("Total scanned: " + totalCnt);
 	print("Total unhandled errors: " + gErrCnt);
-	print("Total autofix attempts: " + autoFixAttempts);
-	print("Total autofix success: " + autoFixSuccess);
-	print("Total autofix fail: " + autoFixFail);
 	if (checksum != modifiedCnt)
 		print("SERIOUS ERROR: THIS SHOULD NEVER HAPPEN.");
 	print("");

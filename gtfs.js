@@ -9,7 +9,9 @@ function printV(str)
 	//print(str);
 }
 /*
-WORK IN PROGRESS 
+Script page: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
+Last update: 20 Dec 2017
+major version: 1
 
 [out:xml][timeout:90][bbox:29.5734571,34.1674805,33.4131022,35.925293];
 (

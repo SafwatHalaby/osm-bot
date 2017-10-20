@@ -1,8 +1,9 @@
 cd /home/osm/openStreetMap/gtfs
 
 # Grabs a new stops.txt from the mot site and parses it, setting the
-# stage from gtfs.js to compare old/parsed.txt and new/parsed.txt, and
+# stage for gtfs.js to compare old/parsed.txt and new/parsed.txt, which
 # then incrementally update the bus stops in Israel.
+# See: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
 
 mv old old_backup
 mv new old
@@ -11,14 +12,13 @@ mkdir new
 # At this point, "old/" and "old_backup/" are folders that have:
 # - "stops.txt" (original DB)
 # - "parsed.txt" (parsed DB)
-# - "date.txt" (download date 
-# "new" is an empty folder
+# - "date.txt" (download date)
 # stops.txt contains lines that are as follows
 # stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,location_type,parent_station,zone_id
 
 ./download.sh # downloads a new stops.txt from the mot site
 
-mv stops.txt new/ # put the new stops.txt in "new"
+mv stops.txt new/
 cd new/
 cat stops.txt | tail --lines=+2 | cut -d "," -f 2-6 | sort > parsed.txt
 # 1. cut the header (not a bus station)

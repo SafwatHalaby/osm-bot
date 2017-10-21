@@ -26,10 +26,16 @@ var gCellSize_meters = 100;
 // First, this function is called for the entire dataset, return "true" for the elements that
 // are interesting to you return false for anything you want to ignore.
 // The more you ignore, the faster the algorithm runs.
+var SOURCE_VAL = "israel_gtfs";
 function filter(p)
 {
 	if (p.tags["highway"] === "bus_stop")
 	{
+		if ((p.tags.ref === undefined) && (p.tags.source === SOURCE_VAL))
+		{
+			addFixme(p, "has source=gtfs_israel but has no ref. Invalid!. Flagged by SafwatHalaby_bot (flag-gtfs3)");
+			return false;
+		}
 		gStats.total++;
 		return true;
 	}
@@ -44,10 +50,10 @@ var FIXME_notInGTFS = "ref value not present in Israeli government GTFS. Flagged
 function compare(p1, p2)
 {
 	// if p1 is a valid stop which is in the government gtfs records
-	if ((p1.tags.ref !== undefined) && (p1.tags.source === "israel_gtfs"))
+	if ((p1.tags.ref !== undefined) && (p1.tags.source === SOURCE_VAL))
 	{
 		// if p2 has no ref and isn't in the government gtfs records
-		if ((p2.tags.ref === undefined) && (p2.tags.source !== "israel_gtfs"))
+		if ((p2.tags.ref === undefined) && (p2.tags.source !== SOURCE_VAL))
 		{
 			var dist = distance(p1, p2);
 			if (dist < 50) 
@@ -72,7 +78,7 @@ function compare(p1, p2)
 			}
 		}
 		// if p2 has a ref, but isn't in the government gtfs files.
-		else if ((p2.tags.ref !== undefined) && (p2.tags.source !== "israel_gtfs"))
+		else if ((p2.tags.ref !== undefined) && (p2.tags.source !== SOURCE_VAL))
 		{
 			var dist = distance(p1, p2);
 			if (dist < 100)

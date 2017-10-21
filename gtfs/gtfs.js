@@ -240,7 +240,6 @@ function main()
 			{
 				print("INFO: - - X: " + ref + ". Nothing (doesn't have source=gtfs). id: " + el.id);	
 				gStats.ddx_nothing++;
-				el.tags["DEBUG"] = "bot";
 				gStats.nothing++;
 			}
 		}
@@ -331,6 +330,18 @@ function setIfNotSetAndChanged(key, stop)
 	return false;
 }
 
+// set on an osm element, regardless of gtfs files. 
+// Use this for stuff that have no gtfs file values (e.g. shelter, source, etc)
+function setRaw(osmElement, key, value)
+{
+	if (osmElement.tags[key] !== value)
+	{
+		osmElement.tags[key] = value;
+		return true;
+	}
+	return false;
+}
+
 function busStopUpdate(stop, isCreated)
 {
 	
@@ -378,7 +389,8 @@ function busStopUpdate(stop, isCreated)
 	
 	if (isCreated)
 	{
-		setIfNotSetAndChanged("source", "israel_gtfs");
+		setRaw(stop.osmElement, "source", "israel_gtfs");
+		setRaw(stop.osmElement, "gtfs:verified", "no");
 		return;
 	}
 	
@@ -395,7 +407,13 @@ function busStopUpdate(stop, isCreated)
 	
 	if (touched)
 	{
-		setIfNotSetAndChanged("source", "israel_gtfs");
+		setRaw(stop.osmElement, "gtfs:verified", "no");
+	}
+	
+	touched = setRaw(stop.osmElement, "source", "israel_gtfs") || touched;
+	
+	if (touched)
+	{
 		gStats.update_touched++;
 		gStats.touched++;
 	}

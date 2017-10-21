@@ -40,33 +40,59 @@ function filter(p)
 // guaranteed to be called for every 2 elements that weren't filtered, and that are "gCellSize_meters" meters or less far apart
 // may be called for additional elements too.
 // Performed twice for every nearby pair, (p1 and p2 will swap on the second call)
+var FIXME_notInGTFS = "ref value not present in Israeli government GTFS. Flagged by SafwatHalaby_bot (flag-gtfs2).";
 function compare(p1, p2)
 {
-	if ((p1.tags.ref !== undefined) && 
-	(p2.tags.ref === undefined))
+	// if p1 is a valid stop which is in the government gtfs records
+	if ((p1.tags.ref !== undefined) && (p1.tags.source === "israel_gtfs"))
 	{
-		var dist = distance(p1, p2);
-		if (dist < 50) 
+		// if p2 has no ref and isn't in the government gtfs records
+		if ((p2.tags.ref === undefined) && (p2.tags.source !== "israel_gtfs"))
 		{
-			removeFromGrid(p2); // element won't be further involved in any comparisons
-			for (key in p2.tags)
+			var dist = distance(p1, p2);
+			if (dist < 50) 
 			{
-				if (p2.tags.hasOwnProperty(key) && (key != "highway"))
+				removeFromGrid(p2); // element won't be further involved in any comparisons
+				
+				// if p2 has no tags other than highway=bus_stop, remove it, otherwise add a fixme
+				// because it's close to a stop which has a ref and it's a likely duplicate
+				for (key in p2.tags)
 				{
-					gStats.manual++;
-					print(p2.id + " requires manual check/merge. Compare it with " + p1.id + " (" + dist + "m)");
-					var str = "Suspected duplicate stop. Flagged by SafwatHalaby_bot#busMerge";
-					if (p2.tags.fixme === undefined)
-						p2.tags.fixme = str;
-					else
-						p2.tags.fixme += ". " + str;
-					return;
+					if (p2.tags.hasOwnProperty(key) && (key != "highway"))
+					{
+						gStats.manual++;
+						//print(p2.id + " requires manual check/merge. Compare it with " + p1.id + " (" + dist + "m)");
+						addFixme(p2, "Suspected duplicate stop. Flagged by SafwatHalaby_bot (flag-gtfs1).");
+						return;
+					}
 				}
+				// has no tags other than highway=bus_stop
+				gStats.del++;	
+				del(p2); // element will be removed from the dataset (must call removeFromGrid first)
 			}
-			gStats.del++;	
-			del(p2); // element will be removed from the dataset (must call removeFromGrid first)
+		}
+		// if p2 has a ref, but isn't in the government gtfs files.
+		else if ((p2.tags.ref !== undefined) && (p2.tags.source !== "israel_gtfs"))
+		{
+			var dist = distance(p1, p2);
+			if (dist < 100)
+			{
+				removeFromGrid(p2); 
+				print(p2.id + " ref not in gtfs db. ref: " + p2.tags.ref);
+				addFixme(p2, FIXME_notInGTFS);
+				// this note is applied to a subset of the gtjs.js ddx_nothing stops,
+				// only the ones 100m close to a stop with source=israel_gtfs.
+				// This is to avoid ever touching Palestinian stops
+			}
+		}
+		
+		if ((p1.tags.fixme !== undefined) && (p1.tags.fixme.indexOf(FIXME_notInGTFS) !== -1))
+		{
+			// this element is now in the GTFS file, so we should remove the outdated fixme.
+			p1.tags.fixme = p1.tags.fixme.replace("; " + FIXME_notInGTFS, "").replace(FIXME_notInGTFS, "").trim();
 		}
 	}
+	
 }
 
 // called once at the start, before filter(p) is called on all elements.
@@ -127,6 +153,15 @@ function distance(element1, element2) {
 
 function deg2rad(deg) {
   return deg * (Math.PI/180)
+}
+
+function addFixme(p, str, note)
+{
+	// todo file to track fixmes and not reintroduce them if user deletes them
+	if (p.tags.fixme === undefined)
+		p.tags.fixme = str;
+	else if (p.tags.fixme.indexOf("SafwatHalaby_bot") === -1)
+		p.tags.fixme += "; " + str;
 }
 
 

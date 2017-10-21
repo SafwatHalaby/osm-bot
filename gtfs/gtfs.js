@@ -376,7 +376,14 @@ function busStopUpdate(stop, isCreated)
 	touched = setIfNotSetAndChanged("name:he",stop) || touched;
 	touched = setIfNotSetAndChanged("description", stop) || touched;
 	
-	if (isCreated) return;
+	if (isCreated)
+	{
+		setIfNotSetAndChanged("source", "israel_gtfs");
+		return;
+	}
+	
+	// modified (non created) stops only:
+	
 	if ((stop.oldEntry === null) || (stop.oldEntry["lat"] !== stop.newEntry["lat"]) || (stop.oldEntry["lon"] !== stop.newEntry["lon"]))
 	{
 		if ((stop.osmElement.lat !== stop.newEntry.lat) || (stop.osmElement.lon !== stop.newEntry.lon))
@@ -388,6 +395,7 @@ function busStopUpdate(stop, isCreated)
 	
 	if (touched)
 	{
+		setIfNotSetAndChanged("source", "israel_gtfs");
 		gStats.update_touched++;
 		gStats.touched++;
 	}

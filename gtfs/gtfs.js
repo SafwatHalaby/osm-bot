@@ -95,7 +95,8 @@ function main()
 	
 	var gtfs = {}; // Contains "stop" objects that look like this: {newEntry: <obj>, oldEntry: <obj>, osmElement: <obj>}
 	// Where newEntry is grabbed from the new GTFS, old from the old one, and osmElement from the dataset.
-	
+	var translations_new = {en : {}, ar: {}};
+	var translations_old = {en : {}, ar: {}};
 	function lineToGtfsEntry(line)
 	{
 		var arr = line.split(",");
@@ -111,23 +112,48 @@ function main()
 	
 	var FATAL = false; // If true, fatal error. Abort.
 	
-	// Read lines from new DB, and fill "gtfs".
+	function fillTranslations(obj, line)
+	{
+		var arr = line.split(",");
+		var original = arr[0].trim();
+		var language = arr[1].toLowerCase().trim();
+		if (language == "he") return;
+		var translation = arr[2].trim();
+		if (obj[language] === undefined) {FATAL = true; print("Unexpected translation language: " + language);return;}
+		obj[language][original] = translation;
+	}
+
+	// Read lines from new gtfs, and fill "translations".
+	readFile_forEach(DB_DIR+"/new/translations.txt", function(line)
+	{
+			fillTranslations(translations_new, line+"");
+	});
+	
+	// Read lines from new gtfs, and fill "gtfs".
 	readFile_forEach(DB_DIR+"/new/parsed.txt", function(line)
 	{
-	  var newE = lineToGtfsEntry(line+"");
-	  var ref = newE["ref"];
-	  if (gtfs[ref] !== undefined)
-	  {
+		var newE = lineToGtfsEntry(line+"");
+		var ref = newE["ref"];
+		if (gtfs[ref] !== undefined)
+		{
 			return; // todo handle platforms
 			print("FATAL: Two gtfs entries with same ref in new db: " + ref);
 			FATAL = true;
-	  }
-	  gStats.total_newGTFS++;
-	  gtfs[ref] = {newEntry: newE, oldEntry: null, osmElement: null};
+		}
+		gStats.total_newGTFS++;
+		gtfs[ref] = {newEntry: newE, oldEntry: null, osmElement: null};
+		newE["name:en"] = translations_new["en"][newE.name]; // could be undefined
+		newE["name:ar"] = translations_new["ar"][newE.name]; // could be undefined
+	});
+	delete translations_new;
+
+	// Read lines from old gtfs, and fill "translations".
+	readFile_forEach(DB_DIR+"/old/translations.txt", function(line)
+	{
+		fillTranslations(translations_old, line+""); // +"" translates from Java string to js string
 	});
 	
-
-	// Read lines from old DB, and fill "gtfs".
+	// Read lines from old gtfs, and fill "gtfs".
 	readFile_forEach(DB_DIR+"/old/parsed.txt", function(line)
 	{
 		var oldE = lineToGtfsEntry(line);
@@ -144,7 +170,10 @@ function main()
 		}
 		gStats.total_oldGTFS++;
 		gtfs[ref].oldEntry = oldE;
+		oldE["name:en"] = translations_old["en"][oldE.name]; // could be undefined
+		oldE["name:ar"] = translations_old["ar"][oldE.name]; // could be undefined
 	});
+	delete translations_old;
 	
 	var osm_ref = {};        // ref -> osmElement dictionary.
 	FATAL = initOsmRef(osm_ref, ds) || FATAL; // fills that dictionary. return false if some bus stops have the same ref.
@@ -315,7 +344,16 @@ function setIfNotSetAndChanged(key, stop)
 		var value = stop.newEntry[key];
 		if (stop.osmElement.tags[key] !== value)
 		{
-			stop.osmElement.tags[key] = value;
+			if (value !== undefined)
+			{
+				stop.osmElement.tags[key] = value;
+			}
+			else
+			{
+				// not sure if it ever happens.
+				// could happen if a bad translation is removed from gtfs file
+				stop.osmElement.removeTag(key);
+			}
 			return true;
 		}
 	}
@@ -385,6 +423,8 @@ function busStopUpdate(stop, isCreated)
 	touched = setIfNotSetAndChanged("ref", stop) || touched;
 	touched = setIfNotSetAndChanged("name",stop) || touched;
 	touched = setIfNotSetAndChanged("name:he",stop) || touched;
+	touched = setIfNotSetAndChanged("name:en",stop) || touched;
+	touched = setIfNotSetAndChanged("name:ar",stop) || touched;
 	touched = setIfNotSetAndChanged("description", stop) || touched;
 	
 	if (isCreated)

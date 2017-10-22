@@ -99,6 +99,7 @@ function main()
 	var translations_old = {en : {}, ar: {}};
 	function lineToGtfsEntry(line)
 	{
+		if (line.indexOf("רחוב:מסילת ברזל  עיר") !== -1) return null;  // temporary hack to ignore train stations
 		var arr = line.split(",");
 		var gtfsEntry = {};
 		gtfsEntry["ref"] = arr[0].trim();         // stop_code
@@ -133,6 +134,7 @@ function main()
 	readFile_forEach(DB_DIR+"/new/parsed.txt", function(line)
 	{
 		var newE = lineToGtfsEntry(line+"");
+		if (newE === null) return;
 		var ref = newE["ref"];
 		if (gtfs[ref] !== undefined)
 		{
@@ -157,6 +159,7 @@ function main()
 	readFile_forEach(DB_DIR+"/old/parsed.txt", function(line)
 	{
 		var oldE = lineToGtfsEntry(line);
+		if (oldE === null) return;
 		var ref = oldE["ref"];
 		if (gtfs[ref] === undefined)
 		{

@@ -1,3 +1,4 @@
+(function(){
 var print = require("josm/util").println;
 var layer = josm.layers.get(0);
 var ds = layer.data;
@@ -319,3 +320,4 @@ function make9CellIterator(x, y) {
 }
 
 main();
+})();

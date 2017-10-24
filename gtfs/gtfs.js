@@ -1,13 +1,12 @@
+(function(){
 var print = require("josm/util").println;
 var builder= require("josm/builder");
-var layer = josm.layers.get(0);
-var ds = layer.data;
 var command = require("josm/command");
+var FATAL = false; // If true, fatal error. Abort.
 
-function printV(str)
-{
-	//print(str);
-}
+var VERBOSE_MODE = false; // set to true to print everything
+DB_DIR = "/home/osm/openStreetMap/gtfs/";
+
 /*
 Script page and documentation: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
 Last update: 20 Dec 2017
@@ -29,12 +28,12 @@ out meta;
 
 
 */
-DB_DIR = "/home/osm/openStreetMap/gtfs/";
 
-function del(p)
-{
-	layer.apply(command.delete(p));
-}
+
+
+
+
+////////////////////////////// File functions
 
 function readFile_forEach(path, forEach)
 {
@@ -49,6 +48,35 @@ function readFile_forEach(path, forEach)
 	  forEach(line);
 	}
 	br.close();
+}
+
+function lineToGtfsEntry(line)
+{
+	if (line.indexOf("רחוב:מסילת ברזל  עיר") !== -1) return null;  // temporary hack to ignore train stations
+	var arr = line.split(",");
+	var gtfsEntry = {};
+	gtfsEntry["ref"] = arr[0].trim();         // stop_code
+	gtfsEntry["name"] = arr[1].trim();        // stop_name
+	gtfsEntry["name:he"] = gtfsEntry["name"]; // stop_name (he)
+	gtfsEntry["description"] = arr[2].replace(" רציף:   קומה:  ", "").trim(); // stop_desc
+	gtfsEntry["lat"] = Number(arr[3].trim()); // stop_lat
+	gtfsEntry["lon"] = Number(arr[4].trim()); // stop_lon
+	return gtfsEntry;
+}
+
+
+
+
+////////////////////////////// Small helper functions
+
+function printV(str)
+{
+	if (VERBOSE_MODE === true) print(str);
+}
+
+function del(p, layer)
+{
+	layer.apply(command.delete(p));
 }
 
 // source https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
@@ -70,6 +98,44 @@ function deg2rad(deg) {
   return deg * (Math.PI/180)
 }
 
+// Rhino/JOSM script plugin doesn't seem to have pretty printing for debugging
+// I made thist simple alternative. Similar to browsers' console.log(object)
+function printObj(obj,indent)
+{
+	if (indent === undefined) indent = "";
+	else indent = indent + " ";
+	
+	if (obj instanceof Array)
+	{
+		print(indent+"[");
+		for (var i = 0; i < obj.length; ++i)
+			printObj(obj[i], indent);
+		print(indent+"]");
+	}
+	else if (obj instanceof Object)
+	{
+		print(indent+"(");
+		for (var key in obj)
+		{
+			if (obj.hasOwnProperty(key)) 
+			{
+				print(indent+key+": ");
+				printObj(obj[key], indent);
+			}
+		}
+		print(indent+")");
+	}
+	else // POD
+	{
+		print(indent+obj);
+	}
+}
+
+////////////////////////////// Stats
+
+
+
+
 var gStats = {
 	ddx_del: 0, ddx_nothing: 0, dxd_create: 0, dxx_update: 0, xdd_nothing: 0, xdx_delete: 0, xxd_create: 0, xxx_update: 0,
 	update: 0,                        /* Total updates (update_touched + update_not_touched) */
@@ -88,105 +154,45 @@ var gStats = {
 	//note: total_OsmAfterRun = total_newGTFS + ddx_nothing (ref carrying stops that aren't from gtfs DB)
 }
 
+
+
+////////////////////////////// MAIN
+
 function main()
 {
 	print("");
 	print("### Running script");
+	var layer = josm.layers.get(0); // java will stop us if no dataset present
+	var ds = layer.data;
 	
 	var gtfs = {}; // Contains "stop" objects that look like this: {newEntry: <obj>, oldEntry: <obj>, osmElement: <obj>}
 	// Where newEntry is grabbed from the new GTFS, old from the old one, and osmElement from the dataset.
-	var translations_new = {en : {}, ar: {}};
-	var translations_old = {en : {}, ar: {}};
-	function lineToGtfsEntry(line)
+	
+	// Read lines from the new gtfs, and fill "gtfs".
 	{
-		if (line.indexOf("רחוב:מסילת ברזל  עיר") !== -1) return null;  // temporary hack to ignore train stations
-		var arr = line.split(",");
-		var gtfsEntry = {};
-		gtfsEntry["ref"] = arr[0].trim();         // stop_code
-		gtfsEntry["name"] = arr[1].trim();        // stop_name
-		gtfsEntry["name:he"] = gtfsEntry["name"]; // stop_name (he)
-		gtfsEntry["description"] = arr[2].replace(" רציף:   קומה:  ", "").trim(); // stop_desc
-		gtfsEntry["lat"] = Number(arr[3].trim()); // stop_lat
-		gtfsEntry["lon"] = Number(arr[4].trim()); // stop_lon
-		return gtfsEntry;
+		var translations_new = main_fillTranslations(DB_DIR+"/new/translations.txt"); // sets FATAL if unknown language detected
+		main_fillNewGtfs(gtfs, DB_DIR+"/new/parsed.txt", translations_new); // sets FATAL if some bus stops have the same ref.
 	}
 	
-	var FATAL = false; // If true, fatal error. Abort.
-	
-	function fillTranslations(obj, line)
+	// Read lines from the old gtfs, and fill "gtfs".
 	{
-		var arr = line.split(",");
-		var original = arr[0].trim();
-		var language = arr[1].toLowerCase().trim();
-		if (language == "he") return;
-		var translation = arr[2].trim();
-		if (obj[language] === undefined) {FATAL = true; print("Unexpected translation language: " + language);return;}
-		obj[language][original] = translation;
+		var translations_old = main_fillTranslations(DB_DIR+"/old/translations.txt"); // sets FATAL if unknown language detected
+		main_fillOldGtfs(gtfs, DB_DIR+"/old/parsed.txt", translations_old); // sets FATAL if some bus stops have the same ref.
 	}
-
-	// Read lines from new gtfs, and fill "translations".
-	readFile_forEach(DB_DIR+"/new/translations.txt", function(line)
-	{
-			fillTranslations(translations_new, line+"");
-	});
 	
-	// Read lines from new gtfs, and fill "gtfs".
-	readFile_forEach(DB_DIR+"/new/parsed.txt", function(line)
-	{
-		var newE = lineToGtfsEntry(line+"");
-		if (newE === null) return;
-		var ref = newE["ref"];
-		if (gtfs[ref] !== undefined)
-		{
-			return; // todo handle platforms
-			print("FATAL: Two gtfs entries with same ref in new db: " + ref);
-			FATAL = true;
-		}
-		gStats.total_newGTFS++;
-		gtfs[ref] = {newEntry: newE, oldEntry: null, osmElement: null};
-		newE["name:en"] = translations_new["en"][newE.name]; // could be undefined
-		newE["name:ar"] = translations_new["ar"][newE.name]; // could be undefined
-	});
-	delete translations_new;
-
-	// Read lines from old gtfs, and fill "translations".
-	readFile_forEach(DB_DIR+"/old/translations.txt", function(line)
-	{
-		fillTranslations(translations_old, line+""); // +"" translates from Java string to js string
-	});
+	// ref -> osmElement dictionary, will be used below to fill "gtfs"
+	var osm_ref = main_initOsmRef(ds); // sets FATAL if some bus stops have the same ref.
 	
-	// Read lines from old gtfs, and fill "gtfs".
-	readFile_forEach(DB_DIR+"/old/parsed.txt", function(line)
-	{
-		var oldE = lineToGtfsEntry(line);
-		if (oldE === null) return;
-		var ref = oldE["ref"];
-		if (gtfs[ref] === undefined)
-		{
-				gtfs[ref] = {newEntry: null, oldEntry: null, osmElement: null};
-		}
-		if (gtfs[ref].oldEntry !== null)
-		{
-			return; // todo handle platforms
-			print("FATAL: Two gtfs entries with same ref in old db: " + ref);
-			FATAL = true;
-		}
-		gStats.total_oldGTFS++;
-		gtfs[ref].oldEntry = oldE;
-		oldE["name:en"] = translations_old["en"][oldE.name]; // could be undefined
-		oldE["name:ar"] = translations_old["ar"][oldE.name]; // could be undefined
-	});
-	delete translations_old;
-	
-	var osm_ref = {};        // ref -> osmElement dictionary.
-	FATAL = initOsmRef(osm_ref, ds) || FATAL; // fills that dictionary. return false if some bus stops have the same ref.
-	
-
 	if (FATAL)
 	{
 		print("### Script canceled");
 		return;
 	}
+	
+	// creates a table of stops that already had fixmes added. 
+	// We use it to avoid re-adding fixmes when mappers delete them
+	// var fixmes = main_fillFixmes(ds,DB_DIR+"/fixmes.txt"); 
+	//Also removes gone stops from the table and updates the corresponding fixmes.txt
 	
 	// iterate all "gtfs" objects, decide what to do with each. 
 	for (var ref in gtfs)
@@ -213,7 +219,7 @@ function main()
 				{
 					printV("- X -: " + ref + ". Create.");
 					gStats.dxd_create++;
-					busStopCreate(stop);
+					busStopCreate(stop, ds);
 				}
 				// X - -
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
@@ -227,7 +233,7 @@ function main()
 				{
 					printV("X X -: " + ref + ". Create.");
 					gStats.xxd_create++;
-					busStopCreate(stop);
+					busStopCreate(stop, ds);
 				}
 			}
 			// ? ? X
@@ -243,7 +249,7 @@ function main()
 				{
 					printV("X - X: " + ref + ". Delete. id: " + match.id);
 					gStats.xdx_delete++;
-					busStopDelete(stop);
+					busStopDelete(stop, layer);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
@@ -254,7 +260,6 @@ function main()
 			}
 		}
 	}
-	
 
 	// Whatever is left in osm_ref is // - - X
 	for (var ref in osm_ref)
@@ -266,7 +271,7 @@ function main()
 			{
 				gStats.ddx_del++;
 				printV("- - X: " + ref + ". Delete (has source=gtfs). id: " + el.id);	
-				busStopDelete({osmElement: el});
+				busStopDelete({osmElement: el}, layer);
 			}
 			else
 			{
@@ -292,9 +297,9 @@ function main()
 	print("### Script finished");
 }
 
-function initOsmRef(osm_ref, ds)
+function main_initOsmRef(ds)
 {
-	var FATAL = false;
+	var osm_ref = {};
 	ds.each(function(p)
 	{
 			if (p.tags["highway"] !== "bus_stop") return;
@@ -309,11 +314,81 @@ function initOsmRef(osm_ref, ds)
 			{
 				FATAL = true;
 				print("FATAL: multiple bus stops with ref " + ref);
+				return null;
 			}			
 	});
 	gStats.total_OsmAfterRun = gStats.total_OsmBeforeRun;
-	return FATAL;
+	return osm_ref;
 }
+
+function main_fillTranslations(file)
+{
+	var translationObject = {en : {}, ar: {}};
+	readFile_forEach(file, function(javaLine)
+	{
+		var line = javaLine + "";
+		var arr = line.split(",");
+		var original = arr[0].trim();
+		var language = arr[1].toLowerCase().trim();
+		if (language == "he") return;
+		var translation = arr[2].trim();
+		if (translationObject[language] === undefined) {FATAL = true; print("Unexpected translation language: " + language);return;}
+		translationObject[language][original] = translation;
+	});
+	return translationObject;
+}
+
+function main_fillNewGtfs(gtfs, path, translations)
+{
+	readFile_forEach(path, function(javaLine)
+	{
+		var line = javaLine+"";
+		var newE = lineToGtfsEntry(line);
+		if (newE === null) return;
+		var ref = newE["ref"];
+		if (gtfs[ref] !== undefined)
+		{
+			return; // todo handle platforms
+			print("FATAL: Two gtfs entries with same ref in new db: " + ref);
+			FATAL = true;
+		}
+		gStats.total_newGTFS++;
+		gtfs[ref] = {newEntry: newE, oldEntry: null, osmElement: null};
+		newE["name:en"] = translations["en"][newE.name]; // could be undefined
+		newE["name:ar"] = translations["ar"][newE.name]; // could be undefined
+	});
+}
+
+function main_fillOldGtfs(gtfs, path, translations)
+{
+	readFile_forEach(path, function(javaLine)
+	{
+		var line = javaLine+"";
+		var oldE = lineToGtfsEntry(line);
+		if (oldE === null) return;
+		var ref = oldE["ref"];
+		if (gtfs[ref] === undefined)
+		{
+				gtfs[ref] = {newEntry: null, oldEntry: null, osmElement: null};
+		}
+		if (gtfs[ref].oldEntry !== null)
+		{
+			return; // todo handle platforms
+			print("FATAL: Two gtfs entries with same ref in old db: " + ref);
+			FATAL = true;
+		}
+		gStats.total_oldGTFS++;
+		gtfs[ref].oldEntry = oldE;
+		oldE["name:en"] = translations["en"][oldE.name]; // could be undefined
+		oldE["name:ar"] = translations["ar"][oldE.name]; // could be undefined
+	});
+}
+	
+
+
+////////////////////////////// gtfs and osm functions
+
+
 
 function matchGtfEntryToAnOsmElement(osm_ref, stop)
 {
@@ -331,18 +406,13 @@ function matchGtfEntryToAnOsmElement(osm_ref, stop)
 		}
 }
 
-function setIfNotSet(osmNode, key, value)
+function setIfNotSetAndChanged(key, stop, isCreated)
 {
-	 // prevents "touching" nodes without changing them. Adding them needlessly to the changeset
-	if (osmNode.tags[key] !== value)
-		osmNode.tags[key] = value;
-}
-
-function setIfNotSetAndChanged(key, stop)
-{
-	// Only touch the values that have been either changed between old db and new db
-	// 2. don't exist in old db.
-	if ((stop.oldEntry === null) || (stop.oldEntry[key] !== stop.newEntry[key]))
+	// Only touch the values that:
+	// 1. have been either changed between old db and new db
+	// 2. don't exist in old db
+	// 3. for a created stop
+	if (isCreated || (stop.oldEntry === null) || (stop.oldEntry[key] !== stop.newEntry[key]))
 	{
 		var value = stop.newEntry[key];
 		if (stop.osmElement.tags[key] !== value)
@@ -351,7 +421,7 @@ function setIfNotSetAndChanged(key, stop)
 			{
 				stop.osmElement.tags[key] = value;
 			}
-			else
+			else if (!isCreated)
 			{
 				// not sure if it ever happens.
 				// could happen if a bad translation is removed from gtfs file
@@ -423,12 +493,12 @@ function busStopUpdate(stop, isCreated)
 	}*/
 	
 	var touched = false;
-	touched = setIfNotSetAndChanged("ref", stop) || touched;
-	touched = setIfNotSetAndChanged("name",stop) || touched;
-	touched = setIfNotSetAndChanged("name:he",stop) || touched;
-	touched = setIfNotSetAndChanged("name:en",stop) || touched;
-	touched = setIfNotSetAndChanged("name:ar",stop) || touched;
-	touched = setIfNotSetAndChanged("description", stop) || touched;
+	touched = setIfNotSetAndChanged("ref", stop, isCreated) || touched;
+	touched = setIfNotSetAndChanged("name",stop, isCreated) || touched;
+	touched = setIfNotSetAndChanged("name:he",stop, isCreated) || touched;
+	touched = setIfNotSetAndChanged("name:en",stop, isCreated) || touched;
+	touched = setIfNotSetAndChanged("name:ar",stop, isCreated) || touched;
+	touched = setIfNotSetAndChanged("description", stop, isCreated) || touched;
 	
 	if (isCreated)
 	{
@@ -466,7 +536,7 @@ function busStopUpdate(stop, isCreated)
 	}
 }
 
-function busStopCreate(stop)
+function busStopCreate(stop, ds)
 {
 	gStats.create++;
 	gStats.touched++;
@@ -479,13 +549,19 @@ function busStopCreate(stop)
 	busStopUpdate(stop, true);
 }
 
-function busStopDelete(stop)
+function busStopDelete(stop, layer)
 {
 	gStats.del++;
 	gStats.touched++;
 	gStats.total_OsmAfterRun--;
-	del(stop.osmElement);
+	del(stop.osmElement, layer);
 }
+
+
+
+////////////////////////////// Other
+
+
 
 function performSanityChecks()
 {
@@ -502,4 +578,4 @@ function performSanityChecks()
 }
 
 main();
-
+})();

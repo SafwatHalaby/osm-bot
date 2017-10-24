@@ -226,14 +226,14 @@ function main()
 			{
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
-					printCD("- X -: " + ref + ". Created.");
+					printCD("-X-: " + ref + ". Created.");
 					gStats.dxd_create++;
 					busStopCreate(stop, ds);
 				}
 				// X - -
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
-					printV("X - -: " + ref + ". Nothing done.");
+					printV("X--: " + ref + ". NoActioon.");
 					gStats.xdd_nothing++;
 					gStats.nothing++;
 				}
@@ -242,13 +242,14 @@ function main()
 				{
 					if (shouldCreateXXD(stop))
 					{
-						printCD("X X -: " + ref + ". Created.");
+						printCD("XX-: " + ref + ". Created.");
 						gStats.xxd_create++;
 						busStopCreate(stop, ds);
 					}
 					else
 					{
-						print("DESYNC: X X -: " + ref + ". Nothing done. Stop exists in GTFS but deleted by user");
+						// XX- NoAction
+						print("DESYNC: " + ref + " Stop exists in GTFS but deleted by user.");
 						gStats.xxd_nothing++;	
 						gStats.nothing++;
 					}
@@ -259,19 +260,19 @@ function main()
 			{	
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
-					printV("- X X: " + ref + ". Updated. id: " + match.id);
+					printV("-XX: " + ref + ". Updated. osmId=" + match.id);
 					gStats.dxx_update++;
 					busStopUpdate(stop);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
-					printCD("X - X: " + ref + ". Deleted. id: " + match.id);
+					printCD("X-X: " + ref + ". Deleted. osmId=" + match.id);
 					gStats.xdx_delete++;
 					busStopDelete(stop, layer);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
-					printV("X X X: " + ref + ". Updated. id: " + match.id);
+					printV("XXX: " + ref + ". Updated. osmId=" + match.id);
 					gStats.xxx_update++;
 					busStopUpdate(stop);
 				}
@@ -288,12 +289,13 @@ function main()
 			if ((el.tags["source"] === "israel_gtfs") || (el.tags["source"] === "israel_gtfs_v1"))
 			{
 				gStats.ddx_del++;
-				printCD("- - X: " + ref + ". Deleted (has source=gtfs). id: " + el.id);	
+				printCD("--X: " + ref + ". Deleted. Has source=gtfs. osmId=" + el.id);	
 				busStopDelete({osmElement: el}, layer);
 			}
 			else
 			{
-				print("DESYNC: - - X: " + ref + ". Nothing done (doesn't have source=gtfs and ref only present in OSM). id: " + el.id);	
+				// --X: NoAction
+				print("DESYNC: " + ref + " Stop only in OSM and no source=gtfs. osmId=" + el.id);	
 				gStats.ddx_nothing++;
 				gStats.nothing++;
 			}
@@ -450,10 +452,12 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 	}
 	else if ((stop.oldEntry !== null) && (stop.oldEntry[key] === stop.newEntry[key]) && (stop.newEntry[key] !== stop.osmElement.tags[key]))
 	{
-		print("DESYNC: Kept user value for ref=" + stop.osmElement.tags.ref + 
-		": key=" + key +
-		", gtfsValue=" + stop.oldEntry[key] + 
-		", userValue=" + stop.osmElement.tags[key]);
+		// XXX - NoAction
+		print("DESYNC: " + stop.osmElement.tags.ref + " Value desync." + 
+		" key=" + key +
+		", gtfsVal=" + stop.oldEntry[key] + 
+		", osmVal=" + stop.osmElement.tags[key] +
+		", osmId=" + stop.osmElement.id);
 	}
 	return false;
 }

@@ -5,7 +5,7 @@ var command = require("josm/command");
 var FATAL = false; // If true, fatal error. Abort.
 
 var VERBOSE_MODE = false; // set to true to print everything
-DB_DIR = "/home/osm/openStreetMap/gtfs/";
+var DB_DIR = "/home/osm/openStreetMap/gtfs/";
 
 /*
 Script page and documentation: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
@@ -99,7 +99,7 @@ function deg2rad(deg) {
 }
 
 // Rhino/JOSM script plugin doesn't seem to have pretty printing for debugging
-// I made thist simple alternative. Similar to browsers' console.log(object)
+// I made this simple alternative. Similar to browsers' console.log(object)
 function printObj(obj,indent)
 {
 	if (indent === undefined) indent = "";
@@ -168,19 +168,19 @@ function main()
 	var gtfs = {}; // Contains "stop" objects that look like this: {newEntry: <obj>, oldEntry: <obj>, osmElement: <obj>}
 	// Where newEntry is grabbed from the new GTFS, old from the old one, and osmElement from the dataset.
 	
-	// Read lines from the new gtfs, and fill "gtfs".
+	// Read lines from the new gtfs, and fill "gtfs[ref].newEntry"
 	{
 		var translations_new = main_fillTranslations(DB_DIR+"/new/translations.txt"); // sets FATAL if unknown language detected
 		main_fillNewGtfs(gtfs, DB_DIR+"/new/parsed.txt", translations_new); // sets FATAL if some bus stops have the same ref.
 	}
 	
-	// Read lines from the old gtfs, and fill "gtfs".
+	// Read lines from the old gtfs, and fill "gtfs[ref].oldEntry"
 	{
 		var translations_old = main_fillTranslations(DB_DIR+"/old/translations.txt"); // sets FATAL if unknown language detected
 		main_fillOldGtfs(gtfs, DB_DIR+"/old/parsed.txt", translations_old); // sets FATAL if some bus stops have the same ref.
 	}
 	
-	// ref -> osmElement dictionary, will be used below to fill "gtfs"
+	// ref -> osmElement dictionary, will be used below to fill "gtfs[ref].osmElement"
 	var osm_ref = main_initOsmRef(ds); // sets FATAL if some bus stops have the same ref.
 	
 	if (FATAL)
@@ -192,14 +192,16 @@ function main()
 	// creates a table of stops that already had fixmes added. 
 	// We use it to avoid re-adding fixmes when mappers delete them
 	// var fixmes = main_fillFixmes(ds,DB_DIR+"/fixmes.txt"); 
-	//Also removes gone stops from the table and updates the corresponding fixmes.txt
+	// Also removes gone stops from the table and updates fixmes.txt
+	// TODO
 	
 	// iterate all "gtfs" objects, decide what to do with each. 
 	for (var ref in gtfs)
 	{
 		if (gtfs.hasOwnProperty(ref)) 
 		{
-			var stop = gtfs[ref]; // {newEntry: <obj or null>, oldEntry: <obj or null>, osmElement: null (filled below)}
+			var stop = gtfs[ref]; 
+			// stop = {newEntry: <obj or null>, oldEntry: <obj or null>, osmElement: null (or filled below)}
 			
 			// - - -  => N/A
 			if ((stop.oldEntry === null) && (stop.newEntry === null))
@@ -208,7 +210,8 @@ function main()
 				return;
 			}
 			
-			// Fill stop.osmElement. whatever element is returned is also removed from osm_ref
+			// Fill stop.osmElement. The element returned is also removed from osm_ref
+			// May return null
 			var match = matchGtfEntryToAnOsmElement(osm_ref, stop); 
 			stop.osmElement = match;
 			

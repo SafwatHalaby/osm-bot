@@ -5,6 +5,7 @@ var command = require("josm/command");
 var FATAL = false; // If true, fatal error. Abort.
 
 var VERBOSE_MODE = false; // set to true to print everything
+var PRINT_CREATE_DELETE = false;  // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
 var DB_DIR = "/home/osm/openStreetMap/gtfs/";
 
 /*
@@ -74,6 +75,11 @@ function printV(str)
 	if (VERBOSE_MODE === true) print(str);
 }
 
+function printCD(str)
+{
+	if ((VERBOSE_MODE === true) || (PRINT_CREATE_DELETE === true)) print(str);
+}
+
 function del(p, layer)
 {
 	layer.apply(command.delete(p));
@@ -137,7 +143,7 @@ function printObj(obj,indent)
 
 
 var gStats = {
-	ddx_del: 0, ddx_nothing: 0, dxd_create: 0, dxx_update: 0, xdd_nothing: 0, xdx_delete: 0, xxd_create: 0, xxx_update: 0,
+	ddx_del: 0, ddx_nothing: 0, dxd_create: 0, dxx_update: 0, xdd_nothing: 0, xdx_delete: 0, xxd_create: 0, xxd_nothing: 0, xxx_update: 0,
 	update: 0,                        /* Total updates (update_touched + update_not_touched) */
 	update_touched: 0                 /* Total updates that actually changed something */,
 	update_not_touched: 0,            /* Total bus stop update attempts that didn't need to change any tags */
@@ -145,7 +151,7 @@ var gStats = {
 	update_distanceTooFar_ignored: 0, /* Total updates that were done despite the position changing significantly */
 	create: 0,                        /* Total created stops (dxd_create+xxd_create) */
 	del: 0,                           /* Total deleted stops (ddx_del+xdx_delete) */
-	nothing: 0,                       /* Total stops where no action was taken (xdd_nothing+ddx_nothing) */
+	nothing: 0,                       /* Total stops where no action was taken (xdd_nothing+ddx_nothing+xxd_nothing) */
 	touched: 0,                       /* create + del + update_touched */
 	total_newGTFS: 0,                 /* total bus stop lines in the new GTFS file. */
 	total_oldGTFS: 0,                 /* total bus stop lines in the old GTFS file */
@@ -220,23 +226,32 @@ function main()
 			{
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
-					printV("- X -: " + ref + ". Create.");
+					printCD("- X -: " + ref + ". Created.");
 					gStats.dxd_create++;
 					busStopCreate(stop, ds);
 				}
 				// X - -
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
-					printV("X - -: " + ref + ". Nothing.");
+					printV("X - -: " + ref + ". Nothing done.");
 					gStats.xdd_nothing++;
 					gStats.nothing++;
 				}
 				// X X -
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
-					printV("X X -: " + ref + ". Create.");
-					gStats.xxd_create++;
-					busStopCreate(stop, ds);
+					if (shouldCreateXXD(stop))
+					{
+						printCD("X X -: " + ref + ". Created.");
+						gStats.xxd_create++;
+						busStopCreate(stop, ds);
+					}
+					else
+					{
+						print("DESYNC: X X -: " + ref + ". Nothing done. Stop exists in GTFS but deleted by user");
+						gStats.xxd_nothing++;	
+						gStats.nothing++;
+					}
 				}
 			}
 			// ? ? X
@@ -244,19 +259,19 @@ function main()
 			{	
 				if ((stop.oldEntry === null) && (stop.newEntry !== null))
 				{
-					printV("- X X: " + ref + ". Update. id: " + match.id);
+					printV("- X X: " + ref + ". Updated. id: " + match.id);
 					gStats.dxx_update++;
 					busStopUpdate(stop);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
-					printV("X - X: " + ref + ". Delete. id: " + match.id);
+					printCD("X - X: " + ref + ". Deleted. id: " + match.id);
 					gStats.xdx_delete++;
 					busStopDelete(stop, layer);
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
-					printV("X X X: " + ref + ". Update. id: " + match.id);
+					printV("X X X: " + ref + ". Updated. id: " + match.id);
 					gStats.xxx_update++;
 					busStopUpdate(stop);
 				}
@@ -273,12 +288,12 @@ function main()
 			if ((el.tags["source"] === "israel_gtfs") || (el.tags["source"] === "israel_gtfs_v1"))
 			{
 				gStats.ddx_del++;
-				printV("- - X: " + ref + ". Delete (has source=gtfs). id: " + el.id);	
+				printCD("- - X: " + ref + ". Deleted (has source=gtfs). id: " + el.id);	
 				busStopDelete({osmElement: el}, layer);
 			}
 			else
 			{
-				print("INFO: - - X: " + ref + ". Nothing (doesn't have source=gtfs). id: " + el.id);	
+				print("DESYNC: - - X: " + ref + ". Nothing done (doesn't have source=gtfs and ref only present in OSM). id: " + el.id);	
 				gStats.ddx_nothing++;
 				gStats.nothing++;
 			}
@@ -433,13 +448,12 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 			return true;
 		}
 	}
-	else if ((stop.oldEntry !== null) && (stop.oldEntry[key] !== stop.newEntry[key]) && (stop.newEntry[key] !== stop.osmElement.tags[key]))
+	else if ((stop.oldEntry !== null) && (stop.oldEntry[key] === stop.newEntry[key]) && (stop.newEntry[key] !== stop.osmElement.tags[key]))
 	{
-		print("INFO: Kept user value for ref=" + stop.osmElement.ref + 
+		print("DESYNC: Kept user value for ref=" + stop.osmElement.tags.ref + 
 		": key=" + key +
-		", old=" + stop.oldEntry[key] + 
-		", new=" + stop.newEntry[key] +
-		", user=" + stop.osmElement.tags[key]);
+		", gtfsValue=" + stop.oldEntry[key] + 
+		", userValue=" + stop.osmElement.tags[key]);
 	}
 	return false;
 }
@@ -453,6 +467,26 @@ function setRaw(osmElement, key, value)
 		osmElement.tags[key] = value;
 		return true;
 	}
+	return false;
+}
+
+function shouldCreateXXD(stop)
+{
+	// this stop exists in old and new gtfs files
+	// but doesn't exist in OSM, meaning a user deleted it
+	// If it hasn't changed since then, we shouldn't recreate it
+	// Otherwise, we should. (We always trust the most recent change)
+	
+	for (var key in stop.oldEntry)
+	{
+		if (stop.oldEntry.hasOwnProperty(key))
+		{
+			if (stop.oldEntry[key] !== stop.newEntry[key]) return true;
+		}
+	}
+	/*print("these are identical");
+	printObj(stop.oldEntry);
+	printObj(stop.newEntry);*/
 	return false;
 }
 
@@ -575,9 +609,9 @@ function performSanityChecks()
 	if (s.update_touched + s.create + s.del != s.touched) print("ASSERT FAIL - touches");
 	if (s.total_OsmBeforeRun + s.create - s.del != s.total_OsmAfterRun) 
 		print("ASSERT FAIL - beforeAfter" + s.total_OsmBeforeRun + "+" + s.create + "-" + s.del + "=" + s.total_OsmAfterRun);
-	if (s.ddx_nothing + s.xdd_nothing != s.nothing) print("ASSERT FAIL - nothing");
+	if (s.ddx_nothing + s.xdd_nothing + s.xxd_nothing != s.nothing) print("ASSERT FAIL - nothing");
 	if (s.update_touched + s.update_not_touched != s.update) print("ASSERT FAIL - updateTouches");
-	if (s.total_newGTFS + s.ddx_nothing != s.total_OsmAfterRun) print("ASSERT FAIL - finalBusStopSum");
+	if (s.total_newGTFS + s.ddx_nothing - s.xxd_nothing != s.total_OsmAfterRun) print("ASSERT FAIL - finalBusStopSum");
 }
 
 main();

@@ -30,7 +30,8 @@ out meta;
 
 */
 
-
+// TODO DESYNC logging for pos changes
+// log coordinates in all DESYNC logs
 
 
 
@@ -54,7 +55,8 @@ function readFile_forEach(path, forEach)
 function lineToGtfsEntry(line)
 {
 	if (line.indexOf("רחוב:מסילת ברזל  עיר") !== -1) return null;  // temporary hack to ignore train stations
-	var arr = line.split(",");
+	if (line.trim() === "") return null; //whitespace-only line
+	var arr = line.replace(/\s+/g, ' ').split(",");
 	var gtfsEntry = {};
 	gtfsEntry["ref"] = arr[0].trim();         // stop_code
 	gtfsEntry["name"] = arr[1].trim();        // stop_name
@@ -233,7 +235,7 @@ function main()
 				// X - -
 				if ((stop.oldEntry !== null) && (stop.newEntry === null))
 				{
-					printV("X--: " + ref + ". NoActioon.");
+					printV("X--: " + ref + ". NoAction.");
 					gStats.xdd_nothing++;
 					gStats.nothing++;
 				}
@@ -450,7 +452,8 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 			return true;
 		}
 	}
-	else if ((stop.oldEntry !== null) && (stop.oldEntry[key] === stop.newEntry[key]) && (stop.newEntry[key] !== stop.osmElement.tags[key]))
+	//else if ((stop.oldEntry !== null) && (stop.oldEntry[key] === stop.newEntry[key]) && (stop.newEntry[key] !== stop.osmElement.tags[key]))
+	if (stop.newEntry[key] !== stop.osmElement.tags[key]) // TODO same logic. right?
 	{
 		// XXX - NoAction
 		print("DESYNC: " + stop.osmElement.tags.ref + " Value desync." + 

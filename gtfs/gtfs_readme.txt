@@ -30,3 +30,8 @@ gtfs_bootstrap.js:
   old/parsed.txt, allowing gtfs.js to work properly.
   Alternatively, gtfs.js can be bootstrapped with a blank
   old/parsed.txt.
+test_gtfs:
+  Contains test files that test all primary code paths
+  (updating, creating, deleting, etc). Load stops_test.osm
+  to JOSM and then run the script, giving it the "new" and
+  "old" folder as input.

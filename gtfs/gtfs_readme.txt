@@ -11,18 +11,22 @@ tasks that are completely unrelated to gtfs. This includes merging
 duplicate nodes, or comparing OSM elements with nearby elements.
 
 Scripts explanation:
-gtfs.js: The main script. Takes 2 gtfs files as input and updates an
-         OSM dataset.
-getAndParse.sh: Downloads newer gtfs files, and parses them in 
-                preparation for consumption by gtfs.js
-space.js: A helper script, which removes duplicate bus stops and flags
-          suspect duplicates. It can be modified to perform other spacial
-          tasks unrelated to GTFS. Should be run after gtfs.js.
-gtfs_bootstrap.js: Can derive a gtfs file from an OSM dataset.
-                   If someone else imported bus stops to your country years
-                   ago, and the file used for import is lost, this can
-                   be used to recreate it by downloading the old import
-                   changeset, and feeding it to gtfs_bootstrap.js to create
-                   old/parsed.txt, allowing gtfs.js to work properly.
-                   Alternatively, gtfs.js can be bootstrapped with a blank
-                   old/parsed.txt.
+gtfs.js:       
+  The main script. Takes 2 gtfs files as input and updates an
+  OSM dataset.
+getAndParse.sh:
+  Downloads newer gtfs files, and parses them in 
+  preparation for consumption by gtfs.js
+space.js:
+  A helper script, which removes duplicate bus stops and flags
+  suspect duplicates. It can be modified to perform other spacial
+  tasks unrelated to GTFS. Should be run after gtfs.js.
+gtfs_bootstrap.js: 
+  Can derive a gtfs file from an OSM dataset.
+  If someone else imported bus stops to your country years
+  ago, and the file used for import is lost, this can
+  be used to recreate it by downloading the old import
+  changeset, and feeding it to gtfs_bootstrap.js to create
+  old/parsed.txt, allowing gtfs.js to work properly.
+  Alternatively, gtfs.js can be bootstrapped with a blank
+  old/parsed.txt.

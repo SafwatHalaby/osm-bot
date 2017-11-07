@@ -562,6 +562,13 @@ function busStopUpdate(stop, isCreated)
 		}
 	}
 	
+	if ((stop.newEntry["lat"] != stop.osmElement.lat) || (stop.newEntry["lon"] != stop.osmElement.lon))
+	{
+		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon).toFixed(2);
+		print("DESYNC " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
+		stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
+	}
+	
 	if (touched)
 	{
 		setRaw(stop.osmElement, "gtfs:verified", "no");

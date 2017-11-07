@@ -16,7 +16,7 @@ mkdir new
 # stops.txt contains lines that are as follows
 # stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,location_type,parent_station,zone_id
 
-/home/osm/openStreetMap/scripts/download.sh # downloads a new stops.txt from the mot site
+wget --timestamping ftp://gtfs.mot.gov.il/israel-public-transportation.zip
 unzip israel-public-transportation.zip stops.txt translations.txt
 cd new/
 cat ../stops.txt | tail --lines=+2 | cut -d "," -f 2-6 | sort > parsed.txt

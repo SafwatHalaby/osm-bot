@@ -1,4 +1,5 @@
 #!/usr/bin/expect
+# This is not needed anymoree (replaced with wget one-liner inside getAndParse.sh)
 
 set timeout 30
 spawn ftp -p gtfs.mot.gov.il

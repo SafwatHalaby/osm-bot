@@ -45,7 +45,7 @@ fi
 
 # At this point we have "new/", which is about to be moved to "old/",
 # and we have no "old/".
-lastModified=`stat -c "%y" israel-public-transportation.zip`
+lastModified=`stat -c "%y" israel-public-transportation.zip` 2> /dev/null || lastModified="N/A"
 wget --timestamping ftp://gtfs.mot.gov.il/israel-public-transportation.zip || exit 2
 lastModified2=`stat -c "%y" israel-public-transportation.zip`
 if [ "$lastModified" =  "$lastModified2" ]; then

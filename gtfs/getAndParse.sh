@@ -55,11 +55,10 @@ fi
 
 mv new old
 mkdir new
-cd new/
 
 # stops.txt contains the following comma-separated fields:
 # stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,location_type,parent_station,zone_id
-unzip -p ../israel-public-transportation.zip stops.txt | tail --lines=+2 | cut -d "," -f 2-6 | sort > parsed.txt
+unzip -p israel-public-transportation.zip stops.txt | tail --lines=+2 | cut -d "," -f 2-6 | sort > new/parsed.txt
 # 1. Remove the header (not a bus station)
 # 2. Keep only columns 2-6 (stop_code,stop_name,stop_desc,stop_lat,stop_lon)
 # 3. Sort by stop_code (probably no longer needed)
@@ -67,10 +66,9 @@ unzip -p ../israel-public-transportation.zip stops.txt | tail --lines=+2 | cut -
 # translations.txt contains the following comma-separated fields:
 # trans_id,lang,translation
 # trans_id is simply the hebrew name, lang is a two-letter language code.
-unzip -p ../israel-public-transportation.zip translations.txt | tail --lines=+2 > translations.txt
+unzip -p israel-public-transportation.zip translations.txt | tail --lines=+2 > new/translations.txt
 # cut the header (not a translation)
 
 # date output example: "2017-11-08_0910_Wed" means "Wed Nov 8 09:10 2017"
-date +%F_%H%M%S_%a > date.txt # save date of download. Used by backups, and by humans if manual file inspection is needed.
-cd ..
+date +%F_%H%M%S_%a > new/date.txt # save date of download. Used by backups, and by humans if manual file inspection is needed.
 createBackup

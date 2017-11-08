@@ -45,20 +45,16 @@ elif [ ! -d new ]; then
 fi
 # if "new/" exists and "old/" does not exist, we do nothing special 
 # and none of the blocks above are entered
-# At this point we have "new/", which is about to be moved to "old/",
 
 if [ "$NO_DOWNLOAD" = "0" ]; then
 	lastModified=`stat -c "%y" israel-public-transportation.zip` 2> /dev/null || lastModified="N/A"
 	wget --timestamping ftp://gtfs.mot.gov.il/israel-public-transportation.zip || exit 2
 	lastModified2=`stat -c "%y" israel-public-transportation.zip`
-else
-	lastModified="1"
-	lastModified2="2"
-fi
-
-if [ "$lastModified" =  "$lastModified2" ]; then
-	echo "Bus stops not modified. Script exiting"
-	exit 0
+	
+	if [ "$lastModified" =  "$lastModified2" ]; then
+		echo "Bus stops not modified. Script exiting"
+		exit 0
+	fi
 fi
 
 if [ -d old ]; then rm -fr old; fi

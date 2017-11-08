@@ -1,3 +1,7 @@
+DATA_DIR=/home/osm/openStreetMap/gtfs
+NO_DOWNLOAD=0 # if 1, israel-public-transportation.zip is not downloaded
+# and the script will run even if israel-public-transportation.zip is not modified.
+
 # Downloads updated gtfs data from the mot site and parses it, setting the
 # stage for gtfs.js to compare old/parsed.txt and new/parsed.txt, which
 # then incrementally updates the bus stops in Israel.
@@ -22,12 +26,11 @@ createBackup()
 	# The shallow copy (hard link) allows us to avoid file redundancies.
 }
 
-cd /home/osm/openStreetMap/gtfs
+cd "$DATA_DIR"
 if [ -d new ] && [ -d old ]; then
 	# --- "new/" exists, "old/" exists ---
 	# First, we create a backup of the existing files if no backup exists already
 	createBackup
-	rm -fr old
 elif [ -d old ]; then
 	# --- "new/" does not exist, "old/" exists ---
 	echo "Error: An \"old\" folder exists but a \"new\" folder is not present" >&2
@@ -40,19 +43,25 @@ elif [ ! -d new ]; then
 	touch new/parsed.txt new/translations.txt
 	echo "N/A (blank bootstrap)" > new/date.txt
 fi
-# if "new/" exists, "old/" does not exist, we do nothing special 
+# if "new/" exists and "old/" does not exist, we do nothing special 
 # and none of the blocks above are entered
-
 # At this point we have "new/", which is about to be moved to "old/",
-# and we have no "old/".
-lastModified=`stat -c "%y" israel-public-transportation.zip` 2> /dev/null || lastModified="N/A"
-wget --timestamping ftp://gtfs.mot.gov.il/israel-public-transportation.zip || exit 2
-lastModified2=`stat -c "%y" israel-public-transportation.zip`
+
+if [ "$NO_DOWNLOAD" = "0" ]; then
+	lastModified=`stat -c "%y" israel-public-transportation.zip` 2> /dev/null || lastModified="N/A"
+	wget --timestamping ftp://gtfs.mot.gov.il/israel-public-transportation.zip || exit 2
+	lastModified2=`stat -c "%y" israel-public-transportation.zip`
+else
+	lastModified="1"
+	lastModified2="2"
+fi
+
 if [ "$lastModified" =  "$lastModified2" ]; then
 	echo "Bus stops not modified. Script exiting"
 	exit 0
 fi
 
+if [ -d old ]; then rm -fr old; fi
 mv new old
 mkdir new
 

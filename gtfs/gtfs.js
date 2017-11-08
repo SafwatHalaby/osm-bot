@@ -4,10 +4,12 @@ var builder= require("josm/builder");
 var command = require("josm/command");
 var FATAL = false; // If true, fatal error. Abort.
 
-var VERBOSE_MODE = true; // set to true to print everything
-var PRINT_CREATE_DELETE = false;  // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
+var VERBOSE_MODE = true; // set to true to print everything except XXX_update. 
+var PRINT_CREATE_DELETE = true;  // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
+var PRINT_XXX = false; // Print xxx_update. Extremely verbose on incremental updates
 var DB_DIR = "/home/osm/openStreetMap/gtfs/";
 var DELETE_DEBUG = false; // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG" rather than delete nodes.
+// Desync messages are always printed
 
 /*
 Script page and documentation: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
@@ -28,11 +30,6 @@ area(3601803010); // Judea and Samaria
 (._;node(w););
 out meta;
 */
-
-// TODO DESYNC logging for pos changes
-// log coordinates in all DESYNC logs
-
-
 
 ////////////////////////////// File functions
 
@@ -276,7 +273,8 @@ function main()
 				}
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
-					printV("XXX: " + ref + ". Updated. osmId=" + match.id);
+					if (PRINT_XXX)
+						print("XXX: " + ref + ". Updated. osmId=" + match.id); // uncomment if you wanna get SUPER verbose
 					gStats.xxx_update++;
 					busStopUpdate(stop);
 				}
@@ -567,7 +565,7 @@ function busStopUpdate(stop, isCreated)
 	if ((stop.newEntry["lat"] != stop.osmElement.lat) || (stop.newEntry["lon"] != stop.osmElement.lon))
 	{
 		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon).toFixed(2);
-		print("DESYNC " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
+		print("DESYNC: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
 		stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
 	}
 	

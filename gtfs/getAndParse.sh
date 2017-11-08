@@ -42,9 +42,9 @@ fi
 
 # At this point we have "new/", which is about to be moved to "old/",
 # and we have no "old/".
+wget --timestamping ftp://gtfs.mot.gov.il/israel-public-transportation.zip || exit 2
 mv new old
 mkdir new
-wget --timestamping ftp://gtfs.mot.gov.il/israel-public-transportation.zip
 cd new/
 
 # stops.txt contains the following comma-separated fields:

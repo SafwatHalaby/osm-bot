@@ -8,23 +8,26 @@
 # - "translations.txt" (mapping of text to Hebrew, Arabic, and English)
 # - "date.txt" (download date)
 
-cd /home/osm/openStreetMap/gtfs
-if [ -d new ] && [ -d old ]; then
-	# --- "new/" exists, "old/" exists ---
-	# First, we create a backup of the existing files if no backup exists already
+createBackup()
+{
 	if [ ! -d backups ]; then mkdir backups; fi
 	BACKUP_DIR=backups/`cat new/date.txt`
 	if [ ! -d "$BACKUP_DIR" ]; then
 		mkdir "$BACKUP_DIR"
 		mkdir "$BACKUP_DIR"/new 
+		mkdir "$BACKUP_DIR"/old
 		ln new/* "$BACKUP_DIR"/new/ # hard link
-		mv old "$BACKUP_DIR"
-	else
-		rm -fr old
+		ln old/* "$BACKUP_DIR"/old/ # hard link
 	fi
 	# The shallow copy (hard link) allows us to avoid file redundancies.
-	# Every backup's "new" folder will be the same as the next backup's 
-	# "old" folder on the physical disk.
+}
+
+cd /home/osm/openStreetMap/gtfs
+if [ -d new ] && [ -d old ]; then
+	# --- "new/" exists, "old/" exists ---
+	# First, we create a backup of the existing files if no backup exists already
+	createBackup
+	rm -fr old
 elif [ -d old ]; then
 	# --- "new/" does not exist, "old/" exists ---
 	echo "Error: An \"old\" folder exists but a \"new\" folder is not present" >&2
@@ -63,3 +66,4 @@ unzip -p ../israel-public-transportation.zip translations.txt | tail --lines=+2 
 # date output example: "2017-11-08_0910_Wed" means "Wed Nov 8 09:10 2017"
 date +%F_%H%M%S_%a > date.txt # save date of download. Used by backups, and by humans if manual file inspection is needed.
 cd ..
+createBackup

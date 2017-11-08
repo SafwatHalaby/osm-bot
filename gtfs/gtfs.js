@@ -4,30 +4,29 @@ var builder= require("josm/builder");
 var command = require("josm/command");
 var FATAL = false; // If true, fatal error. Abort.
 
-var VERBOSE_MODE = false; // set to true to print everything
+var VERBOSE_MODE = true; // set to true to print everything
 var PRINT_CREATE_DELETE = false;  // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
 var DB_DIR = "/home/osm/openStreetMap/gtfs/";
+var DELETE_DEBUG = false; // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG" rather than delete nodes.
 
 /*
 Script page and documentation: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
 Last update: 20 Dec 2017
 major version: 1
 
-[out:xml][timeout:90][bbox:29.5734571,34.1674805,33.4131022,35.925293];
+ 
+[out:xml][timeout:90][bbox:29.4013195,33.8818359,33.4131022,36.0791016];
 (
-area(3601473946);
-area(3603791785);
+area(3601473946); // Israel
+area(3601803010); // Judea and Samaria
 )->.a;
 (
   node["highway"="bus_stop"](area.a);
   way["highway"="bus_stop"](area.a);
 );
+(._;way(bn););
+(._;node(w););
 out meta;
-*/
-//3601473946 - IL. 3603791785 - area C
-/*
-
-
 */
 
 // TODO DESYNC logging for pos changes
@@ -84,7 +83,10 @@ function printCD(str)
 
 function del(p, layer)
 {
-	layer.apply(command.delete(p));
+	if (!DELETE_DEBUG)
+		layer.apply(command.delete(p));
+	else
+		p.tags["DELETE_DEBUG"] = "DELETE_DEBUG";
 }
 
 // source https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
@@ -291,7 +293,7 @@ function main()
 			if ((el.tags["source"] === "israel_gtfs") || (el.tags["source"] === "israel_gtfs_v1"))
 			{
 				gStats.ddx_del++;
-				printCD("--X: " + ref + ". Deleted. Has source=gtfs. osmId=" + el.id);	
+				print("--X: " + ref + ". Deleted. Has source=gtfs. osmId=" + el.id);	
 				busStopDelete({osmElement: el}, layer);
 			}
 			else

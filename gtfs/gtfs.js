@@ -25,9 +25,11 @@ area(3601803010); // Judea and Samaria
 (
   node["highway"="bus_stop"](area.a);
   way["highway"="bus_stop"](area.a);
-);
-(._;way(bn););
-(._;node(w););
+)->.b;
+(rel(bw.b);rel(bn.b))->.routes;
+(.b;way(bn.b);)->.b;
+(.b;node(w.b);)->.b;
+(.b;.routes;);
 out meta;
 */
 

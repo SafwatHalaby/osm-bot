@@ -57,8 +57,7 @@ function lineToGtfsEntry(line)
 	var arr = line.replace(/\s+/g, ' ').split(",");
 	var gtfsEntry = {};
 	gtfsEntry["ref"] = arr[0].trim();         // stop_code
-	gtfsEntry["name"] = arr[1].trim();        // stop_name
-	gtfsEntry["name:he"] = gtfsEntry["name"]; // stop_name (he)
+	gtfsEntry["name:he"] = arr[1].trim();     // stop_name (he)
 	gtfsEntry["description"] = arr[2].replace(" רציף:   קומה:  ", "").trim(); // stop_desc
 	gtfsEntry["lat"] = Number(arr[3].trim()); // stop_lat
 	gtfsEntry["lon"] = Number(arr[4].trim()); // stop_lon
@@ -351,7 +350,7 @@ function main_fillTranslations(file)
 	readFile_forEach(file, function(javaLine)
 	{
 		var line = javaLine + "";
-		var arr = line.split(",");
+		var arr = line.replace(/\s+/g, ' ').split(",");
 		var original = arr[0].trim();
 		var language = arr[1].toLowerCase().trim();
 		if (language == "he") return;
@@ -378,8 +377,8 @@ function main_fillNewGtfs(gtfs, path, translations)
 		}
 		gStats.total_newGTFS++;
 		gtfs[ref] = {newEntry: newE, oldEntry: null, osmElement: null};
-		newE["name:en"] = translations["en"][newE.name]; // could be undefined
-		newE["name:ar"] = translations["ar"][newE.name]; // could be undefined
+		newE["name:en"] = translations["en"][newE["name:he"]]; // could be undefined
+		newE["name:ar"] = translations["ar"][newE["name:he"]]; // could be undefined
 	});
 }
 
@@ -403,8 +402,8 @@ function main_fillOldGtfs(gtfs, path, translations)
 		}
 		gStats.total_oldGTFS++;
 		gtfs[ref].oldEntry = oldE;
-		oldE["name:en"] = translations["en"][oldE.name]; // could be undefined
-		oldE["name:ar"] = translations["ar"][oldE.name]; // could be undefined
+		oldE["name:en"] = translations["en"][oldE["name:he"]]; // could be undefined
+		oldE["name:ar"] = translations["ar"][oldE["name:he"]]; // could be undefined
 	});
 }
 	
@@ -444,6 +443,12 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 			if (value !== undefined)
 			{
 				stop.osmElement.tags[key] = value;
+					if ((key === "name:ar") && (stop.oldEntry !== null))
+					{
+						print("###############");
+						print(stop.newEntry[key]);
+						print(stop.oldEntry[key]);
+					}
 			}
 			else if (!isCreated)
 			{
@@ -540,11 +545,21 @@ function busStopUpdate(stop, isCreated)
 	
 	var touched = false;
 	touched = setIfNotSetAndChanged("ref", stop, isCreated) || touched;
-	touched = setIfNotSetAndChanged("name",stop, isCreated) || touched;
-	touched = setIfNotSetAndChanged("name:he",stop, isCreated) || touched;
 	touched = setIfNotSetAndChanged("name:en",stop, isCreated) || touched;
-	touched = setIfNotSetAndChanged("name:ar",stop, isCreated) || touched;
 	touched = setIfNotSetAndChanged("description", stop, isCreated) || touched;
+	var arTouched = setIfNotSetAndChanged("name:ar",stop, isCreated) || touched;
+	var heTouched = setIfNotSetAndChanged("name:he",stop, isCreated) || touched;
+	touched = touched || arTouched || heTouched;
+	
+	var currentName = stop.osmElement.tags["name"];
+	if (arTouched && (currentName !== undefined) && (currentName.search(/[\u0600-\u06FF]/) !== -1)) // at least 1 ar letter
+	{
+		setRaw(stop.osmElement, "name", stop.newEntry["name:ar"]);
+	}
+	else if (heTouched)
+	{
+		setRaw(stop.osmElement, "name", stop.newEntry["name:he"]);
+	}
 	
 	if (isCreated)
 	{

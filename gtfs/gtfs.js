@@ -443,12 +443,6 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 			if (value !== undefined)
 			{
 				stop.osmElement.tags[key] = value;
-					if ((key === "name:ar") && (stop.oldEntry !== null))
-					{
-						print("###############");
-						print(stop.newEntry[key]);
-						print(stop.oldEntry[key]);
-					}
 			}
 			else if (!isCreated)
 			{

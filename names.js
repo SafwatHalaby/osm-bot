@@ -119,11 +119,10 @@ function addFixme(p, str)
 {
 	str += " Flagged by SafwatHalaby_bot-nameCopy";
 	if (p.tags.fixme === undefined)
+	{
 		p.tags.fixme = str;
-	else
-		p.tags.fixme += ". " + str;
-		
-	fixmeCnt++;
+		fixmeCnt++;
+	}
 }
 
 function main()

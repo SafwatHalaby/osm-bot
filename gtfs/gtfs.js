@@ -26,7 +26,7 @@ area(3601803010); // Judea and Samaria
   node["highway"="bus_stop"](area.a);
   way["highway"="bus_stop"](area.a);
 )->.b;
-(rel(bw.b);rel(bn.b))->.routes;
+(rel(bw.b);rel(bn.b);)->.routes;
 (.b;way(bn.b);)->.b;
 (.b;node(w.b);)->.b;
 (.b;.routes;);
@@ -50,18 +50,65 @@ function readFile_forEach(path, forEach)
 	br.close();
 }
 
+var trainStationTempCnt = 0;
+/** Reads a line from the GTFS files and returns a Javascript gtfs entry. */
 function lineToGtfsEntry(line)
 {
-	if (line.indexOf("רחוב:מסילת ברזל  עיר") !== -1) return null;  // temporary hack to ignore train stations
+	if (line.indexOf("רחוב:מסילת ברזל  עיר") !== -1) {trainStationTempCnt++; return null;}  // temporary hack to ignore train stations
 	if (line.trim() === "") return null; //whitespace-only line
-	var arr = line.replace(/\s+/g, ' ').split(",");
+	var arr = line.split(",");
 	var gtfsEntry = {};
-	gtfsEntry["ref"] = arr[0].trim();         // stop_code
-	gtfsEntry["name:he"] = arr[1].trim();     // stop_name (he)
-	gtfsEntry["description"] = arr[2].replace(" רציף:   קומה:  ", "").trim(); // stop_desc
-	gtfsEntry["lat"] = Number(arr[3].trim()); // stop_lat
-	gtfsEntry["lon"] = Number(arr[4].trim()); // stop_lon
+	gtfsEntry["ref"] = cleanupString(arr[0]);         // stop_code
+	gtfsEntry["name:he"] = cleanupString(arr[1]);     // stop_name (he)
+	gtfsEntry["description"] = descriptionParseCleanStringify(arr[2]);
+	gtfsEntry["lat"] = Number(cleanupString(arr[3])); // stop_lat
+	gtfsEntry["lon"] = Number(cleanupString(arr[4])); // stop_lon
 	return gtfsEntry;
+}
+
+function cleanupString(str)
+{
+	return str.replace(/\s+/g, ' ').trim();
+}
+
+// MOT currently uses a key1:val1 key2:val2 format in the description.
+// val might have spaces or might be blank.
+// 1. parses the description
+// 2. ignores keys whose value is blank
+// 3. returns a string
+function descriptionParseCleanStringify(description)
+{
+	var keysAndValues = description.replace('\s+', ' ').split(/([^\s\:]+\:)/g);
+	var currentKey;
+	var first = true;
+	var str = "";
+	for (var i = 0; i < keysAndValues.length; i++)
+	{
+		var current = keysAndValues[i].trim();
+		if (current == "") continue;
+		if (current.search(":") != -1) // key found
+		{
+			currentKey = current.replace(":", "").trim();
+			if (currentKey == "") continue;
+			// print("Found key:", currentKey);
+		}
+		else // lookingFor = VAL
+		{
+			var currentVal = current.trim();
+			if (currentVal == "") continue;
+			// print("Found val. key:", currentKey, "val:", currentVal);
+			addKeyVal(currentKey, currentVal);
+		}
+	}
+	
+	function addKeyVal(currentKey, currentVal)
+	{
+		if (first) first = false;
+		else str += ", ";
+		str += currentKey + ": " + currentVal;
+	}
+	
+	return str;
 }
 
 
@@ -149,8 +196,8 @@ var gStats = {
 	update: 0,                        /* Total updates (update_touched + update_not_touched) */
 	update_touched: 0                 /* Total updates that actually changed something */,
 	update_not_touched: 0,            /* Total bus stop update attempts that didn't need to change any tags */
-	update_distanceTooFar_skipped: 0, /* Total updates that were skipped because the position changed significantly */
-	update_distanceTooFar_ignored: 0, /* Total updates that were done despite the position changing significantly */
+	update_spacialDesync_snap: 0,     /* Total updates that were skipped because the position changed significantly */
+	update_spacialDesync_ignore: 0,   /* Total updates that were done despite the position changing significantly */
 	create: 0,                        /* Total created stops (dxd_create+xxd_create) */
 	del: 0,                           /* Total deleted stops (ddx_del+xdx_delete) */
 	nothing: 0,                       /* Total stops where no action was taken (xdd_nothing+ddx_nothing+xxd_nothing) */
@@ -197,12 +244,6 @@ function main()
 		return;
 	}
 	
-	// creates a table of stops that already had fixmes added. 
-	// We use it to avoid re-adding fixmes when mappers delete them
-	// var fixmes = main_fillFixmes(ds,DB_DIR+"/fixmes.txt"); 
-	// Also removes gone stops from the table and updates fixmes.txt
-	// TODO
-	
 	// iterate all "gtfs" objects, decide what to do with each. 
 	for (var ref in gtfs)
 	{
@@ -242,7 +283,7 @@ function main()
 				// X X -
 				if ((stop.oldEntry !== null) && (stop.newEntry !== null))
 				{
-					if (shouldCreateXXD(stop))
+					if (shouldRecreateXXD(stop))
 					{
 						printCD("XX-: " + ref + ". Created.");
 						gStats.xxd_create++;
@@ -298,7 +339,7 @@ function main()
 			else
 			{
 				// --X: NoAction
-				print("DESYNC: " + ref + " Stop only in OSM and no source=gtfs. osmId=" + el.id);	
+				print("DESYNC: " + ref + " Stop only in OSM and no source=gtfs. osmId=" + el.id);
 				gStats.ddx_nothing++;
 				gStats.nothing++;
 			}
@@ -313,12 +354,15 @@ function main()
 			print(stat + ": " + gStats[stat]);
 		}
 	}
+	print("Ignored train stops: " + trainStationTempCnt);
 
 	// sanity checks on the stats
 	performSanityChecks();
 
 	print("### Script finished");
 }
+
+////////////////////////////// MAIN helpers. Initializiation functions called only once.
 
 function main_initOsmRef(ds)
 {
@@ -429,7 +473,7 @@ function matchGtfEntryToAnOsmElement(osm_ref, stop)
 		}
 }
 
-function setIfNotSetAndChanged(key, stop, isCreated)
+function setIfNotSetAndChanged(key, stop, isCreated) // Currently unused
 {
 	// Only touch the values that:
 	// 1. have been either changed between old db and new db
@@ -453,14 +497,21 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 			return true;
 		}
 	}
-	//else if ((stop.oldEntry !== null) && (stop.oldEntry[key] === stop.newEntry[key]) && (stop.newEntry[key] !== stop.osmElement.tags[key]))
-	if (stop.newEntry[key] !== stop.osmElement.tags[key]) // TODO same logic. right?
+	// reaching here implies: stop.oldEntry is not null
+	// stop.oldEntry equals stop.newEntry
+	// node is not created
+	var gtfsValue = stop.newEntry[key]; // or stop.oldEntry. Same!
+	var mapValue = stop.osmElement.tags[key];
+	if (gtfsValue !== mapValue)
 	{
+		// Do not log cases where the gtfs Hebrew equals "name" and "name:he" is not present.
+		if ((key == "name:he") && (gtfsValue === stop.osmElement.tags["name"]) && (mapValue == undefined)) return false;
+		
 		// XXX - NoAction
 		print("DESYNC: " + stop.osmElement.tags.ref + " Value desync." + 
 		" key=" + key +
-		", gtfsVal=" + stop.oldEntry[key] + 
-		", osmVal=" + stop.osmElement.tags[key] +
+		", gtfsVal=" + gtfsValue + 
+		", osmVal=" + mapValue +
 		", osmId=" + stop.osmElement.id);
 	}
 	return false;
@@ -478,7 +529,7 @@ function setRaw(osmElement, key, value)
 	return false;
 }
 
-function shouldCreateXXD(stop)
+function shouldRecreateXXD(stop)
 {
 	// this stop exists in old and new gtfs files
 	// but doesn't exist in OSM, meaning a user deleted it
@@ -500,61 +551,49 @@ function shouldCreateXXD(stop)
 
 function busStopUpdate(stop, isCreated)
 {
-	
 	if (isCreated === undefined)
 	{
 		isCreated = false;
 		gStats.update++;
 	}
-	
-	// These checks are probably useless on first run. There have been major changes since 2012. Almost all "warnings" are expected to be false positives.
-	/*if (!isCreated)
-	{
-	* 
-		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon);
-		if (distance > 50)
-		{
-			// the bus stop is about to be moved more than 50 meters, something could be wrong
-			
-			if ((stop.oldEntry != null) && (getDistanceFromLatLonInM(stop.oldEntry.lat, stop.oldEntry.lon, stop.osmElement.lat, stop.osmElement.lon) < 20))
-			{
-				// The distance difference happened due to difference from the older database, continue
-				print("INFO: bus stop " + distance + "m from where it should be. Continued anyways. ref: " + stop.osmElement.tags["ref"] + " id: " + stop.osmElement.id);
-				stop.osmElement.tags["DEBUG111"] = "debug";
-				gStats.update_distanceTooFar_ignored++;
-			}
-			else
-			{
-				// The distance difference happened because a mapper moved this stop. The mapper and the GTFS DB disagree significantly. Warn!
-				print("WARN: bus stop " + distance + "m from where it should be. Skipped. ref: " 
-					+ stop.osmElement.tags["ref"] + " id: " + stop.osmElement.id);
-				gStats.update_not_touched++;
-				stop.osmElement.tags["DEBUG222"] = "debug";
-				gStats.update_distanceTooFar_skipped++;
-				return false;
-			}
-		}
 
-	}*/
-	
 	var touched = false;
-	touched = setIfNotSetAndChanged("ref", stop, isCreated) || touched;
-	touched = setIfNotSetAndChanged("name:en",stop, isCreated) || touched;
-	touched = setIfNotSetAndChanged("description", stop, isCreated) || touched;
-	var arTouched = setIfNotSetAndChanged("name:ar",stop, isCreated) || touched;
-	var heTouched = setIfNotSetAndChanged("name:he",stop, isCreated) || touched;
-	touched = touched || arTouched || heTouched;
-	
-	var currentName = stop.osmElement.tags["name"];
-	if (arTouched && (currentName !== undefined) && (currentName.search(/[\u0600-\u06FF]/) !== -1)) // at least 1 ar letter
+	function setValue(tag, destTag)
 	{
-		setRaw(stop.osmElement, "name", stop.newEntry["name:ar"]);
+		if (destTag == undefined) destTag = tag;
+		//touched = setIfNotSetAndChanged(tag, stop, isCreated) || touched;
+		var newValue = stop.newEntry[tag];
+		if ((newValue !== undefined) && (newValue !== null) && (newValue != ""))
+		{
+			touched = setRaw(stop.osmElement, destTag, stop.newEntry[tag]) || touched;
+			return touched;
+		}
+		else
+		{
+			return false;
+		}
 	}
-	else if (heTouched)
-	{
-		setRaw(stop.osmElement, "name", stop.newEntry["name:he"]);
-	}
+	setValue("ref");
+	setValue("name:en");
+	// setValue("description");
+	var arTouched = setValue("name:ar");
+	var heTouched = setValue("name:he")
 	
+	var mapName = stop.osmElement.tags["name"];
+	var mapNameIsArabic = false;
+	if ((mapName !== undefined) && (mapName.search(/[\u0600-\u06FF]/) !== -1)) // at least 1 ar letter
+		mapNameIsArabic = true;
+
+	//do not copy number-only names to name:ar or name:he
+	if (mapNameIsArabic)
+	{
+		setValue("name:ar", "name");
+	} 
+	else
+	{
+		setValue("name:he", "name");
+	}
+
 	if (isCreated)
 	{
 		setRaw(stop.osmElement, "source", "israel_gtfs");
@@ -564,6 +603,7 @@ function busStopUpdate(stop, isCreated)
 	
 	// modified (non created) stops only:
 	
+	// MOT have updated their position. Override the current position.
 	if ((stop.oldEntry === null) || (stop.oldEntry["lat"] !== stop.newEntry["lat"]) || (stop.oldEntry["lon"] !== stop.newEntry["lon"]))
 	{
 		if ((stop.osmElement.lat !== stop.newEntry.lat) || (stop.osmElement.lon !== stop.newEntry.lon))
@@ -573,12 +613,28 @@ function busStopUpdate(stop, isCreated)
 		}
 	}
 	
+	// The current position differs from the latest MOT position. Decide whether or not to override.
 	if ((stop.newEntry["lat"] != stop.osmElement.lat) || (stop.newEntry["lon"] != stop.osmElement.lon))
 	{
 		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon).toFixed(2);
-		print("DESYNC: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
-		stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
+		if (distance < 5) // the spacial desync is too small. Usually an unintentional mapper micro-movement. Snap it back to gtfs values. (override)
+		{
+			print("SNAP: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
+				stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
+			stop.osmElement.pos = {lat: stop.newEntry.lat, lon: stop.newEntry.lon};
+			gStats.update_spacialDesync_snap++;
+			touched = true;
+		}
+		else // Trust the OSM user's position and keep it. Log it for possible future inspection.
+		{
+			print("DESYNC: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
+				stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
+			gStats.update_spacialDesync_ignore++;
+		}
 	}
+	
+	// The code order below is rather delicate. Careful! 
+	// Reason: touching due to the israel_gtfs tag should not reset gtfs_verified.
 	
 	if (touched)
 	{
@@ -590,7 +646,7 @@ function busStopUpdate(stop, isCreated)
 	if (touched)
 	{
 		gStats.update_touched++;
-		gStats.touched++;
+		gStats.touched++; // created stops bail out early and this is never reached. Therefore increment happens in busStopCreate
 	}
 	else
 	{
@@ -637,7 +693,9 @@ function performSanityChecks()
 	if (s.ddx_nothing + s.xdd_nothing + s.xxd_nothing != s.nothing) print("ASSERT FAIL - nothing");
 	if (s.update_touched + s.update_not_touched != s.update) print("ASSERT FAIL - updateTouches");
 	if (s.total_newGTFS + s.ddx_nothing - s.xxd_nothing != s.total_OsmAfterRun) print("ASSERT FAIL - finalBusStopSum");
+	if (trainStationTempCnt != 0) print("ASSERT FAIL - Trainstation hack stopped working.");
 }
 
 main();
+
 })();

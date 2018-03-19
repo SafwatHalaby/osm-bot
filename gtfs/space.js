@@ -164,6 +164,7 @@ function deg2rad(deg) {
 
 function addFixme(p, str, note)
 {
+	return;
 	// todo file to track fixmes and not reintroduce them if user deletes them
 	if (p.tags.fixme === undefined)
 		p.tags.fixme = str;

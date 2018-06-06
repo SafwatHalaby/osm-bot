@@ -61,15 +61,15 @@ function compare(p1, p2)
 			{
 				removeFromGrid(p2); // element won't be further involved in any comparisons
 				
-				// if p2 has no tags other than highway=bus_stop, remove it, otherwise add a fixme
+				// if p2 has no tags other than highway=bus_stop, remove it, otherwise emit a warning
 				// because it's close to a stop which has a ref and it's a likely duplicate
 				for (key in p2.tags)
 				{
 					if (p2.tags.hasOwnProperty(key) && (key != "highway"))
 					{
 						gStats.manual++;
-						//print(p2.id + " requires manual check/merge. Compare it with " + p1.id + " (" + dist + "m)");
-						addFixme(p2, "Suspected duplicate stop. Flagged by SafwatHalaby_bot (flag-gtfs1).");
+						print(p2.id + " requires manual check/merge. Compare it with " + p1.id + " (" + dist + "m)");
+						//addFixme(p2, "Suspected duplicate stop. Flagged by SafwatHalaby_bot (flag-gtfs1).");
 						return;
 					}
 				}

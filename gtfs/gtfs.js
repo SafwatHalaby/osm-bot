@@ -575,7 +575,7 @@ function busStopUpdate(stop, isCreated)
 	}
 	setValue("ref");
 	setValue("name:en");
-	// setValue("description");
+	setValue("description");
 	var arTouched = setValue("name:ar");
 	var heTouched = setValue("name:he")
 	
@@ -693,7 +693,7 @@ function performSanityChecks()
 	if (s.ddx_nothing + s.xdd_nothing + s.xxd_nothing != s.nothing) print("ASSERT FAIL - nothing");
 	if (s.update_touched + s.update_not_touched != s.update) print("ASSERT FAIL - updateTouches");
 	if (s.total_newGTFS + s.ddx_nothing - s.xxd_nothing != s.total_OsmAfterRun) print("ASSERT FAIL - finalBusStopSum");
-	if (trainStationTempCnt != 0) print("ASSERT FAIL - Trainstation hack stopped working.");
+	if (trainStationTempCnt == 0) print("ASSERT FAIL - Trainstation hack stopped working.");
 }
 
 main();

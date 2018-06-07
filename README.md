@@ -7,7 +7,7 @@ It can be considered a semi-automatic bot; Runs and uploads must be done manuall
 
 Please see my [OSM User Page](https://wiki.openstreetmap.org/wiki/User:SafwatHalaby), and the inline code comments.
 
-#Dependencies
+# Dependencies
 
 There are no special dependencies. 
 

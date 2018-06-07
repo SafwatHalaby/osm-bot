@@ -1,42 +1,42 @@
 (function(){
 
-// A human mapper is allowed to:
-// 1. Remove a stop entirely. The bot will only re-add it if MOT changes it afterwards.
-// 2. Modify any tag which is not in gOverrideList or gAlwaysAdd.
+/* A human mapper is allowed to:
+ 1. Remove a stop entirely. The bot will only re-add it if MOT changes it afterwards.
+ 2. Modify any tag which is not in gOverrideList or gAlwaysAdd.
 
-// There are several kinds of tags.
+There are several kinds of tags.
 
-//gOverrideList:   Tags that the bot will always override and users shouldn't edit.
-//gMostRecentList: The bot respects the most recent change for these tags, be it a GTFS change or an OSM user change.
-//gAlwaysAdd:      The bot always adds these constant keys and values.
-//others:          The bot never modifies any tags which aren't in any of the lists above.
-
-var gOverrideList = ["ref", "description"]; // Also implicitly: name, name:ar, name:he, name:en. These are outside the array because they require special treatment.
-var gMostRecentList = ["addr:street", "addr:number", "level"];  // Also implicitly: lat, lon. These are outside the array because they require special treatment.
+gOverrideList:   Tags that the bot will always override and users shouldn't edit.
+gMostRecentList: The bot respects the most recent change for these tags, be it a GTFS change or an OSM user change.
+gAlwaysAdd:      The bot always adds these constant keys and values.
+others:          The bot never modifies any tags which aren't in any of the lists above.
+*/
+var gOverrideList = ["level", "addr:street", "addr:number", "ref", "description"]; // Also implicitly: name, name:ar, name:he, name:en. These are outside the array because they require special treatment.
+var gMostRecentList = [];  // Also implicitly: lat, lon. These are outside the array because they require special treatment.
 var gAlwaysAdd = [{key: "source", value: "israel_gtfs"}, {key: "public_transport", value: "platform"}, {key: "bus", value: "yes"}];
 
-// Special tags
-//source=israel_gtfs:     The bot relies on this for certain warnings and in the stop deletion logic. Stops without this are never auto deleted but may emit warnings.
-//source=israel_gtfs_v1:  Older scheme. The bot modifies it to israel_gtfs whenever found.
-//gtfs:verified=*:        Older scheme. The bot will always delete this.
+/* Special tags
+ - source=israel_gtfs:     The bot relies on this for certain warnings and in the stop deletion logic. Stops without this are never auto deleted but may emit warnings.
+ - source=israel_gtfs_v1:  Older scheme. The bot modifies it to israel_gtfs whenever found.
+ - gtfs:verified=*:        Older scheme. The bot will always delete this. */
 
 var print = require("josm/util").println;
 var builder= require("josm/builder");
 var command = require("josm/command");
 var FATAL = false; // If true, fatal error. Abort.
 
-var VERBOSE_MODE = true; // set to true to print everything except XXX_update. 
+var VERBOSE_MODE = true;         // set to true to print everything except XXX_update. 
 var PRINT_CREATE_DELETE = true;  // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
-var PRINT_XXX = false; // Print xxx_update. Extremely verbose on incremental updates
-var DB_DIR = "/home/osm/openStreetMap/gtfs/";
-var DELETE_DEBUG = false; // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG" rather than delete nodes.
+var PRINT_XXX = false;           // Print xxx_update. Extremely verbose on incremental updates
+var DELETE_DEBUG = false;        // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG" rather than delete nodes.
+var DB_DIR = "/home/osm/openStreetMap/gtfs/"; // The directory where the old and new gtfs files are present.
 // Desync messages are always printed
 
-/*
-Script page and documentation: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
+/* Script page and documentation: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
 Last update: 07 May 2018
 major version: 2
 
+Typical Overpass query:
  
 [out:xml][timeout:90][bbox:29.4013195,33.8818359,33.4131022,36.0791016];
 (
@@ -82,23 +82,27 @@ function lineToGtfsEntry(line)
 	gtfsEntry["ref"] = cleanupString(arr[0]);         // stop_code
 	gtfsEntry["name:he"] = cleanupString(arr[1]);     // stop_name (he)
 	gtfsEntry["lat"] = Number(cleanupString(arr[3])); // stop_lat
-	gtfsEntry["lon"] = Number(cleanupString(arr[4])); // stop_lon);
+	gtfsEntry["lon"] = Number(cleanupString(arr[4])); // stop_lon
 	var descriptionData = parseDescription(arr[2], gtfsEntry["ref"]); // returns an associative array. See function comments.
 	if (descriptionData["רחוב"] !== undefined)
 	{
 		var streetAndNumber = descriptionData["רחוב"];
 		delete descriptionData["רחוב"];
-		var rgx = streetAndNumber.match(/^(.*?) ([0-9]+)$/);
-		var street;
-		var number;
-		if (rgx != null)
+		if (streetAndNumber.indexOf("/") == -1) // Stops on an intersection sometimes have to streets seperated with a /. Ignore those values.
 		{
-			gtfsEntry["addr:street"] = rgx[1];
-			gtfsEntry["addr:number"] = rgx[2];
-		}
-		else
-		{
-			gtfsEntry["addr:street"] = streetAndNumber;
+			var rgx = streetAndNumber.match(/^(.*?) ([0-9]+)$/);
+			var street;
+			var number;
+			if (rgx != null)
+			{
+				// 0 is for the entire match.
+				gtfsEntry["addr:street"] = rgx[1];
+				gtfsEntry["addr:number"] = rgx[2];
+			}
+			else
+			{
+				gtfsEntry["addr:street"] = streetAndNumber;
+			}
 		}
 	}
 	if (descriptionData["קומה"] !== undefined)
@@ -131,11 +135,11 @@ function cleanupString(str)
 	return str.replace(/\s+/g, ' ').trim();
 }
 
-// MOT currently uses a key1:val1 key2:val2 format in the description.
-// val might have spaces or might be blank.
-// 1. parses the description
-// 2. ignores keys whose value is blank
-// 3. returns an associative array of key-value pairs.
+/** MOT currently uses a key1:val1 key2:val2 format in the description.
+val might have spaces or might be blank.
+1. parses the description
+2. ignores keys whose value is blank
+3. returns an associative array of key-value pairs. */
 function parseDescription(description)
 {
 	var result = {};
@@ -189,7 +193,7 @@ function del(p, layer)
 		p.tags["DELETE_DEBUG"] = "DELETE_DEBUG";
 }
 
-// source https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
+// Source https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
 function getDistanceFromLatLonInM(lat1,lon1,lat2,lon2) {
   var R = 6371; // Radius of the earth in km
   var dLat = deg2rad(lat2-lat1);  // deg2rad below
@@ -208,8 +212,8 @@ function deg2rad(deg) {
   return deg * (Math.PI/180)
 }
 
-// Rhino/JOSM script plugin doesn't seem to have pretty printing for debugging
-// This is a simple alternative, similar to console.log(object)
+/** Rhino/JOSM script plugin doesn't seem to have pretty printing for debugging
+ This is a simple alternative, similar to console.log(object). */
 function printObj(obj,indent)
 {
 	if (indent === undefined) indent = "";
@@ -277,6 +281,7 @@ function main()
 	
 	var gtfs = {}; // Contains "stop" objects that look like this: {newEntry: <obj>, oldEntry: <obj>, osmElement: <obj>}
 	// Where newEntry is grabbed from the new GTFS, old from the old one, and osmElement from the dataset.
+	// newEntry and oldEntry are both assosiative arrays of the key/val pairs. lat/lon are also stored in that same array.
 	
 	// Read lines from the new gtfs, and fill "gtfs[ref].newEntry"
 	{
@@ -299,7 +304,7 @@ function main()
 		return;
 	}
 	
-	// iterate all "gtfs" objects, decide what to do with each. 
+	// Iterate all "gtfs" objects, decide what to do with each. 
 	for (var ref in gtfs)
 	{
 		if (gtfs.hasOwnProperty(ref)) 
@@ -528,26 +533,29 @@ function matchGtfEntryToAnOsmElement(osm_ref, stop)
 		}
 }
 
+/** Only touch the tags that:
+1. have been either changed between theold gtfs and the new gtfs
+2. don't exist in the old gtfs
+3. for a created stop *
+
+Suitable tags are set to the new gtfs file value. */
 function setIfNotSetAndChanged(key, stop, isCreated)
 {
-	// Only touch the values that:
-	// 1. have been either changed between old db and new db
-	// 2. don't exist in old db
-	// 3. for a created stop
+
 	if (isCreated || (stop.oldEntry === null) || (stop.oldEntry[key] !== stop.newEntry[key]))
 	{
 		return setRaw(stop.osmElement, key, stop.newEntry[key]);
 	}
 
 	// reaching here implies: stop.oldEntry = stop.newEntry and it is not null.
-	// Meaning the data value has not change since last run.
-	// Also, the node is not a created node. It's already on the map	.
+	// Meaning the data value has not changed since last run.
+	// Also, the node is not a created node. It's already on the map.	.
 	
-	var gtfsValue = stop.newEntry[key]; // same as gtfsValue = stop.oldEntry[key];!
+	var gtfsValue = stop.newEntry[key]; // same as gtfsValue = stop.oldEntry[key];
 	var mapValue = stop.osmElement.tags[key];
 	if (gtfsValue !== mapValue)
 	{
-		// User value different from GTFS value
+		// User value is different from GTFS value
 		// We honor the user value, but log this anyways
 		
 		// Do not log cases where the gtfs Hebrew equals "name" and "name:he" is not present.
@@ -560,11 +568,11 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 		", osmVal=" + mapValue +
 		", osmId=" + stop.osmElement.id);
 	}
-	// else, the user value also equals the GTFS value. Nothing needs to be done.
+	// Else, the user value also equals the GTFS value. Nothing needs to be done.
 	return false;
 }
 
-// set the tag of an osm element, regardless of gtfs files. 
+/** set the tag of an osm element, regardless of gtfs files. */
 function setRaw(osmElement, key, value)
 {
 	if (osmElement.tags[key] !== value)
@@ -583,12 +591,13 @@ function setRaw(osmElement, key, value)
 	return false;
 }
 
+/** The "stop" exists in the old and the new gtfs files
+but doesn't exist in OSM, meaning a user deleted it
+If it hasn't changed since then, we shouldn't recreate it and we return false.
+Otherwise, we should, so we return true. (We always trust the most recent change) */
 function shouldRecreateXXD(stop)
 {
-	// this stop exists in old and new gtfs files
-	// but doesn't exist in OSM, meaning a user deleted it
-	// If it hasn't changed since then, we shouldn't recreate it
-	// Otherwise, we should. (We always trust the most recent change)
+
 	
 	for (var key in stop.oldEntry)
 	{
@@ -597,9 +606,6 @@ function shouldRecreateXXD(stop)
 			if (stop.oldEntry[key] !== stop.newEntry[key]) return true;
 		}
 	}
-	/*print("these are identical");
-	printObj(stop.oldEntry);
-	printObj(stop.newEntry);*/
 	return false;
 }
 
@@ -619,7 +625,7 @@ function busStopUpdate(stop, isCreated)
 		touched = setRaw(osmElement, key, value) || touched;
 	}
 	
-	// handle the "override" list
+	// Handle the "override" list
 	for (var i = 0; i < gOverrideList.length; i++)
 	{
 		var key = gOverrideList[i];
@@ -627,19 +633,19 @@ function busStopUpdate(stop, isCreated)
 		setRawAndTouched(stop.osmElement, key, val);
 	}
 	
-	// handle the "most recent" list
+	// Handle the "most recent" list
 	for (var i = 0; i < gMostRecentList.length; i++)
 	{
 		touched = setIfNotSetAndChanged(gMostRecentList[i], stop, isCreated) || touched;
 	}
 	
-	// handle the "always add" list
+	// Handle the "always add" list
 	for (var i = 0; i < gAlwaysAdd.length; i++)
 	{
 		setRawAndTouched(stop.osmElement, gAlwaysAdd[i].key, gAlwaysAdd[i].value);
 	}
 
-	// handle name:lang
+	// Handle name:lang
 	function hasLetters(str)
 	{
 		return (str.search(/[^\s0-9\\\/\-\_\:\(\)\{\}\+]/) !== -1);
@@ -650,14 +656,15 @@ function busStopUpdate(stop, isCreated)
 	{
 		var key = langs[i];
 		var val = stop.newEntry[key];
-		if ((val === undefined) || (val === "")) continue; // we have no string for this language. Skip it and allow mappers to set their own.
+		if ((val === undefined) || (val === "")) continue; // We have no string for this language. Skip it and allow mappers to set their own.
 		if (hasLetters(val))
 			setRawAndTouched(stop.osmElement, key, val);
 		else
-			setRawAndTouched(stop.osmElement, key, "");
+			setRawAndTouched(stop.osmElement, key, ""); // The stop name has no letters in this language. Delete it if present
 	}
 	
-	// Decide if name:he > name or name:ar > name.
+	// Decide whether to do name:he --> name 
+	// or name:ar --> name.
 	var mapName = stop.osmElement.tags["name"];
 	var mapNameIsArabic = false;
 	if ((mapName !== undefined) && (mapName.search(/[\u0600-\u06FF]/) !== -1)) // at least 1 ar letter
@@ -679,13 +686,13 @@ function busStopUpdate(stop, isCreated)
 	
 	// The code below is for modified (non created) stops only.
 	
-	// delete legacy tag
+	// Delete legacy tag
 	if (stop.osmElement.tags["gtfs:verified"] !== undefined)
 	{
 		stop.osmElement.removeTag("gtfs:verified");
 	}
 	
-	// If MOT have updated their position. Override the current position.
+	// If MOT have updated their position, override the current position.
 	if ((stop.oldEntry === null) || (stop.oldEntry["lat"] !== stop.newEntry["lat"]) || (stop.oldEntry["lon"] !== stop.newEntry["lon"]))
 	{
 		if ((stop.osmElement.lat !== stop.newEntry.lat) || (stop.osmElement.lon !== stop.newEntry.lon))
@@ -699,16 +706,18 @@ function busStopUpdate(stop, isCreated)
 	if ((stop.newEntry["lat"] != stop.osmElement.lat) || (stop.newEntry["lon"] != stop.osmElement.lon))
 	{
 		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon).toFixed(2);
-		if (distance < 5) // the spacial desync is too small. Usually an unintentional mapper micro-movement. Snap it back to gtfs values. (override)
+		if (distance < 5)
 		{
+			// The spacial desync is too small. Usually an unintentional mapper micro-movement. Snap it back to gtfs values. (override)
 			print("SNAP: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
 				stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
 			stop.osmElement.pos = {lat: stop.newEntry.lat, lon: stop.newEntry.lon};
 			gStats.update_spacialDesync_snap++;
 			touched = true;
 		}
-		else // Trust the OSM user's position and keep it. Log it for possible future inspection.
+		else 
 		{
+			// Trust the OSM user's position and keep it. Log it for possible future inspection.
 			print("DESYNC: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
 				stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
 			gStats.update_spacialDesync_ignore++;
@@ -718,7 +727,7 @@ function busStopUpdate(stop, isCreated)
 	if (touched)
 	{
 		gStats.update_touched++;
-		gStats.touched++; // created stops bail out early and this is never reached. Therefore increment happens in busStopCreate
+		gStats.touched++; // Created stops bail out early and this is never reached. Their increment happens in busStopCreate()
 	}
 	else
 	{
@@ -765,7 +774,7 @@ function performSanityChecks()
 	if (s.ddx_nothing + s.xdd_nothing + s.xxd_nothing != s.nothing) print("ASSERT FAIL - nothing");
 	if (s.update_touched + s.update_not_touched != s.update) print("ASSERT FAIL - updateTouches");
 	if (s.total_newGTFS + s.ddx_nothing - s.xxd_nothing != s.total_OsmAfterRun) print("ASSERT FAIL - finalBusStopSum");
-	if (trainStationTempCnt == 0) print("ASSERT FAIL - Trainstation hack stopped working.");
+	if (trainStationTempCnt < 210) print("ASSERT FAIL - Trainstation hack likely stopped working.");
 }
 
 main();

@@ -1,4 +1,26 @@
 (function(){
+
+// A human mapper is allowed to:
+// 1. Remove a stop entirely. The bot will only re-add it if MOT changes it afterwards.
+// 2. Modify any tag which is not in gOverrideList or gAlwaysAdd.
+
+// There are several kinds of tags.
+
+//gOverrideList:   Tags that the bot will always override and users shouldn't edit.
+//gMostRecentList: The bot respects the most recent change for these tags, be it a GTFS change or an OSM user change.
+//gAlwaysAdd:      The bot always adds these constant keys and values.
+//                 The user is allowed to modify them.
+//others:          The bot does never modifies any tags which aren't in any of the lists above.
+
+var gOverrideList = ["ref", "name:en", "description"]; // Also implicitly: name, name:ar, name:he. These are outside the array because they require special treatment.
+var gMostRecentList = ["addr:street", "addr:number", "level"];  // Also implicitly: lat, lon. These are outside the array because they require special treatment.
+var gAlwaysAdd = [{key: "source", value: "israel_gtfs"}, {key: "public_transport", value: "platform"}, {key: "bus", value: "yes"}];
+
+// Special tags
+//source=israel_gtfs:     The bot relies on this for certain warnings and in the stop deletion logic. Stops without this are never deleted.
+//source=israel_gtfs_v1:  Older scheme. The bot modifies it to israel_gtfs whenever found.
+//gtfs:verified=*:        Older scheme. The bot will always delete this.
+
 var print = require("josm/util").println;
 var builder= require("josm/builder");
 var command = require("josm/command");
@@ -13,8 +35,8 @@ var DELETE_DEBUG = false; // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG"
 
 /*
 Script page and documentation: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/gtfs
-Last update: 20 Dec 2017
-major version: 1
+Last update: 07 May 2018
+major version: 2
 
  
 [out:xml][timeout:90][bbox:29.4013195,33.8818359,33.4131022,36.0791016];
@@ -60,9 +82,50 @@ function lineToGtfsEntry(line)
 	var gtfsEntry = {};
 	gtfsEntry["ref"] = cleanupString(arr[0]);         // stop_code
 	gtfsEntry["name:he"] = cleanupString(arr[1]);     // stop_name (he)
-	gtfsEntry["description"] = descriptionParseCleanStringify(arr[2]);
+	if (gtfsEntry["ref"] == "34097")
+		print("descOut:" + arr[2]);
 	gtfsEntry["lat"] = Number(cleanupString(arr[3])); // stop_lat
-	gtfsEntry["lon"] = Number(cleanupString(arr[4])); // stop_lon
+	gtfsEntry["lon"] = Number(cleanupString(arr[4])); // stop_lon);
+	var descriptionData = parseDescription(arr[2], gtfsEntry["ref"]); // returns an associative array. See function comments.
+	if (descriptionData["רחוב"] !== undefined)
+	{
+		var streetAndNumber = descriptionData["רחוב"];
+		delete descriptionData["רחוב"];
+		var rgx = streetAndNumber.match(/^([^0-9].*?) ?([0-9]+)$/);
+		var street;
+		var number;
+		if (rgx != null)
+		{
+			gtfsEntry["addr:street"] = rgx[1];
+			gtfsEntry["addr:number"] = rgx[2];
+		}
+		else
+		{
+			gtfsEntry["addr:street"] = streetAndNumber;
+		}
+	}
+	if (descriptionData["קומה"] !== undefined)
+	{
+		gtfsEntry["level"] = descriptionData["קומה"];
+		delete descriptionData["קומה"];
+	}
+	
+	// Any descriptionData leftovers are put into the description tag.
+	var first = true;
+	var description = "";
+	for (key in descriptionData)
+	{
+		if (descriptionData.hasOwnProperty(key))
+		{
+			if (first) first = false;
+			else description += ", ";
+			description += key + ": " + descriptionData[key];
+		}
+	}
+	if (description !== "")
+	{
+		gtfsEntry["description"] = description;
+	}
 	return gtfsEntry;
 }
 
@@ -76,12 +139,11 @@ function cleanupString(str)
 // 1. parses the description
 // 2. ignores keys whose value is blank
 // 3. returns a string
-function descriptionParseCleanStringify(description)
+function parseDescription(description)
 {
+	var result = {};
 	var keysAndValues = description.replace('\s+', ' ').split(/([^\s\:]+\:)/g);
 	var currentKey;
-	var first = true;
-	var str = "";
 	for (var i = 0; i < keysAndValues.length; i++)
 	{
 		var current = keysAndValues[i].trim();
@@ -89,26 +151,22 @@ function descriptionParseCleanStringify(description)
 		if (current.search(":") != -1) // key found
 		{
 			currentKey = current.replace(":", "").trim();
+			if (currentKey == "עיר") currentKey = "";
 			if (currentKey == "") continue;
-			// print("Found key:", currentKey);
+			//print("Found key:" + currentKey);
 		}
 		else // lookingFor = VAL
 		{
+			if (currentKey == "") continue;
 			var currentVal = current.trim();
 			if (currentVal == "") continue;
-			// print("Found val. key:", currentKey, "val:", currentVal);
-			addKeyVal(currentKey, currentVal);
+			// print("Found val. key:" + currentKey, ", val:" + currentVal);
+			result[currentKey] = currentVal;
+			currentKey = "";
 		}
 	}
 	
-	function addKeyVal(currentKey, currentVal)
-	{
-		if (first) first = false;
-		else str += ", ";
-		str += currentKey + ": " + currentVal;
-	}
-	
-	return str;
+	return result;
 }
 
 
@@ -154,7 +212,7 @@ function deg2rad(deg) {
 }
 
 // Rhino/JOSM script plugin doesn't seem to have pretty printing for debugging
-// I made this simple alternative. Similar to browsers' console.log(object)
+// This is a simple alternative, similar to console.log(object)
 function printObj(obj,indent)
 {
 	if (indent === undefined) indent = "";
@@ -473,7 +531,7 @@ function matchGtfEntryToAnOsmElement(osm_ref, stop)
 		}
 }
 
-function setIfNotSetAndChanged(key, stop, isCreated) // Currently unused
+function setIfNotSetAndChanged(key, stop, isCreated)
 {
 	// Only touch the values that:
 	// 1. have been either changed between old db and new db
@@ -484,14 +542,12 @@ function setIfNotSetAndChanged(key, stop, isCreated) // Currently unused
 		var value = stop.newEntry[key];
 		if (stop.osmElement.tags[key] !== value)
 		{
-			if (value !== undefined)
+			if ((value !== undefined) && (value !== ""))
 			{
 				stop.osmElement.tags[key] = value;
 			}
-			else if (!isCreated)
+			else
 			{
-				// not sure if it ever happens.
-				// could happen if a bad translation is removed from gtfs file
 				stop.osmElement.removeTag(key);
 			}
 			return true;
@@ -523,7 +579,14 @@ function setRaw(osmElement, key, value)
 {
 	if (osmElement.tags[key] !== value)
 	{
-		osmElement.tags[key] = value;
+		if ((value !== undefined) && (value !== "") && (value !== null))
+		{
+			osmElement.tags[key] = value;
+		}
+		else
+		{
+			osmElement.removeTag(key);
+		}
 		return true;
 	}
 	return false;
@@ -558,26 +621,42 @@ function busStopUpdate(stop, isCreated)
 	}
 
 	var touched = false;
-	function setValue(tag, destTag)
+	
+	function setValue_override(tag, destTag, noBlanks)
 	{
 		if (destTag == undefined) destTag = tag;
-		//touched = setIfNotSetAndChanged(tag, stop, isCreated) || touched;
 		var newValue = stop.newEntry[tag];
-		if ((newValue !== undefined) && (newValue !== null) && (newValue != ""))
-		{
-			touched = setRaw(stop.osmElement, destTag, stop.newEntry[tag]) || touched;
-			return touched;
-		}
-		else
-		{
-			return false;
-		}
+		if ((noBlanks === true) && ((newValue === "") || (newValue === undefined) || (newValue === null))) return false;
+		touched = setRaw(stop.osmElement, destTag, stop.newEntry[tag]) || touched;
+		return touched;
 	}
-	setValue("ref");
-	setValue("name:en");
-	setValue("description");
-	var arTouched = setValue("name:ar");
-	var heTouched = setValue("name:he")
+	
+	function setValue_mostRecent(tag)
+	{
+		touched = setIfNotSetAndChanged(tag, stop, isCreated) || touched;
+	}
+
+	// handle the "override" list
+	for (var i = 0; i < gOverrideList.length; i++)
+	{
+		setValue_override(gOverrideList[i]);
+	}
+	
+	// handle the "most recent" list
+	for (var i = 0; i < gMostRecentList.length; i++)
+	{
+		setValue_mostRecent(gMostRecentList[0]);
+	}
+	
+	// handle the "always add" list
+	for (var i = 0; i < gAlwaysAdd.length; i++)
+	{
+		touched = setRaw(stop.osmElement, gAlwaysAdd[i].key, gAlwaysAdd[i].value) || touched;
+	}
+
+	// handle the special cases
+	var arTouched = setValue_override("name:ar", "name:ar", true);
+	var heTouched = setValue_override("name:he", "name:he", true);
 	
 	var mapName = stop.osmElement.tags["name"];
 	var mapNameIsArabic = false;
@@ -587,23 +666,21 @@ function busStopUpdate(stop, isCreated)
 	//do not copy number-only names to name:ar or name:he
 	if (mapNameIsArabic)
 	{
-		setValue("name:ar", "name");
+		setValue_override("name:ar", "name");
 	} 
 	else
 	{
-		setValue("name:he", "name");
+		setValue_override("name:he", "name");
 	}
 
 	if (isCreated)
 	{
-		setRaw(stop.osmElement, "source", "israel_gtfs");
-		setRaw(stop.osmElement, "gtfs:verified", "no");
 		return;
 	}
 	
 	// modified (non created) stops only:
 	
-	// MOT have updated their position. Override the current position.
+	// If MOT have updated their position. Override the current position.
 	if ((stop.oldEntry === null) || (stop.oldEntry["lat"] !== stop.newEntry["lat"]) || (stop.oldEntry["lon"] !== stop.newEntry["lon"]))
 	{
 		if ((stop.osmElement.lat !== stop.newEntry.lat) || (stop.osmElement.lon !== stop.newEntry.lon))
@@ -613,7 +690,7 @@ function busStopUpdate(stop, isCreated)
 		}
 	}
 	
-	// The current position differs from the latest MOT position. Decide whether or not to override.
+	// Check if the current position differs from the latest MOT position. Decide whether or not to override based on distance.
 	if ((stop.newEntry["lat"] != stop.osmElement.lat) || (stop.newEntry["lon"] != stop.osmElement.lon))
 	{
 		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon).toFixed(2);
@@ -633,15 +710,21 @@ function busStopUpdate(stop, isCreated)
 		}
 	}
 	
-	// The code order below is rather delicate. Careful! 
+	// <outdated comment related to gtfs:verified> The code order below is rather delicate. Careful! 
 	// Reason: touching due to the israel_gtfs tag should not reset gtfs_verified.
 	
-	if (touched)
+	/* if (touched)
 	{
 		setRaw(stop.osmElement, "gtfs:verified", "no");
-	}
+	} */
+
+	// touched = setRaw(stop.osmElement, "source", "israel_gtfs") || touched;
 	
-	touched = setRaw(stop.osmElement, "source", "israel_gtfs") || touched;
+	if (stop.osmElement.tags["gtfs:verified"] !== undefined)
+	{
+		// gtfs:verified has proven to not be useful in practice. We're deleting it if it's found.
+		stop.osmElement.removeTag("gtfs:verified");
+	}
 	
 	if (touched)
 	{

@@ -9,7 +9,6 @@
 //gOverrideList:   Tags that the bot will always override and users shouldn't edit.
 //gMostRecentList: The bot respects the most recent change for these tags, be it a GTFS change or an OSM user change.
 //gAlwaysAdd:      The bot always adds these constant keys and values.
-//                 The user is allowed to modify them.
 //others:          The bot does never modifies any tags which aren't in any of the lists above.
 
 var gOverrideList = ["ref", "name:en", "description"]; // Also implicitly: name, name:ar, name:he. These are outside the array because they require special treatment.
@@ -17,7 +16,7 @@ var gMostRecentList = ["addr:street", "addr:number", "level"];  // Also implicit
 var gAlwaysAdd = [{key: "source", value: "israel_gtfs"}, {key: "public_transport", value: "platform"}, {key: "bus", value: "yes"}];
 
 // Special tags
-//source=israel_gtfs:     The bot relies on this for certain warnings and in the stop deletion logic. Stops without this are never deleted.
+//source=israel_gtfs:     The bot relies on this for certain warnings and in the stop deletion logic. Stops without this are never auto deleted but may emit warnings.
 //source=israel_gtfs_v1:  Older scheme. The bot modifies it to israel_gtfs whenever found.
 //gtfs:verified=*:        Older scheme. The bot will always delete this.
 
@@ -138,7 +137,7 @@ function cleanupString(str)
 // val might have spaces or might be blank.
 // 1. parses the description
 // 2. ignores keys whose value is blank
-// 3. returns a string
+// 3. returns an associative array of key-value pairs.
 function parseDescription(description)
 {
 	var result = {};
@@ -574,7 +573,6 @@ function setIfNotSetAndChanged(key, stop, isCreated)
 }
 
 // set on an osm element, regardless of gtfs files. 
-// Use this for stuff that have no gtfs file values (e.g. shelter, source, etc)
 function setRaw(osmElement, key, value)
 {
 	if (osmElement.tags[key] !== value)
@@ -666,6 +664,7 @@ function busStopUpdate(stop, isCreated)
 	//do not copy number-only names to name:ar or name:he
 	if (mapNameIsArabic)
 	{
+		// TODO what if name:ar is blank?
 		setValue_override("name:ar", "name");
 	} 
 	else

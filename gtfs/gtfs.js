@@ -25,10 +25,12 @@ var builder= require("josm/builder");
 var command = require("josm/command");
 var FATAL = false; // If true, fatal error. Abort.
 
-var VERBOSE_MODE = true;         // set to true to print everything except XXX_update. 
-var PRINT_CREATE_DELETE = true;  // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
-var PRINT_XXX = false;           // Print xxx_update. Extremely verbose on incremental updates
-var DELETE_DEBUG = false;        // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG" rather than delete nodes.
+var VERBOSE_MODE = true;          // set to true to print a line "???_" line for every stop where "?" is d or x, except for XXX_update. 
+var PRINT_CREATE_DELETE = true;   // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
+var PRINT_XXX = false;            // Print xxx_update. Extremely verbose on incremental updates
+var PRINT_UPDATED_TAGS = true;    // Print the precise tags that have changed for updated stops.
+var PRINT_SPACIAL_THRESHOLD = 20; // Print spacial desyncs only if they are larger than this. Overridden positions (<5m) are always printed anyways.
+var DELETE_DEBUG = false;         // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG" rather than delete nodes.
 var DB_DIR = "/home/osm/openStreetMap/gtfs/"; // The directory where the old and new gtfs files are present.
 // Desync messages are always printed
 
@@ -611,18 +613,28 @@ function shouldRecreateXXD(stop)
 
 function busStopUpdate(stop, isCreated)
 {
+	
+	function printTagUpdate(str, key, oldVal, val)
+	{
+		if (shouldPrintUpdates)
+			print("TAG-UPDATE " + str + ": " + stop.osmElement.tags["ref"] + ". key=" + key + ", oldVal=" + oldVal + ", newVal=" + val);
+	}
+	
 	if (isCreated === undefined)
 	{
 		isCreated = false;
 		gStats.update++;
 	}
+	var shouldPrintUpdates = (!isCreated) && (PRINT_UPDATED_TAGS);
 
 	var touched = false;
 	
 	// calls "setRaw" and also turns touched to true if anything actually changed
 	function setRawAndTouched(osmElement, key, value)
 	{
-		touched = setRaw(osmElement, key, value) || touched;
+		var hasTouched = setRaw(osmElement, key, value);
+		touched = hasTouched || touched;
+		return hasTouched;
 	}
 	
 	// Handle the "override" list
@@ -630,19 +642,37 @@ function busStopUpdate(stop, isCreated)
 	{
 		var key = gOverrideList[i];
 		var val = stop.newEntry[key];
-		setRawAndTouched(stop.osmElement, key, val);
+		var oldVal = stop.osmElement.tags[key];
+		if (setRawAndTouched(stop.osmElement, key, val))
+		{
+			printTagUpdate("override", key, oldVal, val);
+		}
 	}
 	
 	// Handle the "most recent" list
 	for (var i = 0; i < gMostRecentList.length; i++)
 	{
-		touched = setIfNotSetAndChanged(gMostRecentList[i], stop, isCreated) || touched;
+		var key = gMostRecentList[i];
+		var oldVal = stop.osmElement.tags[key];
+		var hasTouched = setIfNotSetAndChanged(key, stop, isCreated);
+		touched = hasTouched || touched;
+		if (hasTouched)
+		{
+			var val = stop.osmElement.tags[key];
+			printTagUpdate("mostRecent", key, oldVal, val);
+		}
 	}
 	
 	// Handle the "always add" list
 	for (var i = 0; i < gAlwaysAdd.length; i++)
 	{
-		setRawAndTouched(stop.osmElement, gAlwaysAdd[i].key, gAlwaysAdd[i].value);
+		var key = gAlwaysAdd[i].key;
+		var val = gAlwaysAdd[i].value;
+		var oldVal = stop.osmElement.tags[key];
+		if (setRawAndTouched(stop.osmElement, key, val))
+		{
+			printTagUpdate("alwaysAdd", key, oldVal, val);
+		}
 	}
 
 	// Handle name:lang
@@ -655,12 +685,16 @@ function busStopUpdate(stop, isCreated)
 	for (var i = 0; i < langs.length; i++)
 	{
 		var key = langs[i];
+		var hasTouched;
 		var val = stop.newEntry[key];
+		var oldVal = stop.osmElement.tags[key];
 		if ((val === undefined) || (val === "")) continue; // We have no string for this language. Skip it and allow mappers to set their own.
 		if (hasLetters(val))
-			setRawAndTouched(stop.osmElement, key, val);
+			hasTouched = setRawAndTouched(stop.osmElement, key, val);
 		else
-			setRawAndTouched(stop.osmElement, key, ""); // The stop name has no letters in this language. Delete it if present
+			hasTouched = setRawAndTouched(stop.osmElement, key, ""); // The stop name has no letters in this language. Delete it if present
+		if (hasTouched)
+			printTagUpdate("override", key, oldVal, val);
 	}
 	
 	// Decide whether to do name:he --> name 
@@ -669,15 +703,17 @@ function busStopUpdate(stop, isCreated)
 	var mapNameIsArabic = false;
 	if ((mapName !== undefined) && (mapName.search(/[\u0600-\u06FF]/) !== -1)) // at least 1 ar letter
 		mapNameIsArabic = true;
-
+	var hasTouched;
 	if ((mapNameIsArabic) && (stop.newEntry["name:ar"] !== undefined) && (stop.newEntry["name:ar"] !== null) && (stop.newEntry["name:ar"] !== ""))
 	{
-		setRawAndTouched(stop.osmElement, "name", stop.newEntry["name:ar"]);
+		hasTouched = setRawAndTouched(stop.osmElement, "name", stop.newEntry["name:ar"]);
 	}
 	else
 	{
-		setRawAndTouched(stop.osmElement, "name", stop.newEntry["name:he"]);
+		hasTouched = setRawAndTouched(stop.osmElement, "name", stop.newEntry["name:he"]);
 	}
+	
+	if (hasTouched) printTagUpdate("override", key, oldVal, val);
 
 	if (isCreated)
 	{
@@ -718,8 +754,11 @@ function busStopUpdate(stop, isCreated)
 		else 
 		{
 			// Trust the OSM user's position and keep it. Log it for possible future inspection.
-			print("DESYNC: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
-				stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
+			if (distance >= PRINT_SPACIAL_THRESHOLD)
+			{
+				print("DESYNC: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+
+					stop.osmElement.lon+","+stop.osmElement.lat+"), gtfs=("+stop.newEntry.lon+","+stop.newEntry.lat+")");
+			}
 			gStats.update_spacialDesync_ignore++;
 		}
 	}

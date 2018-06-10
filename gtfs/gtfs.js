@@ -266,7 +266,8 @@ var gStats = {
 	total_newGTFS: 0,                 /* total bus stop lines in the new GTFS file. */
 	total_oldGTFS: 0,                 /* total bus stop lines in the old GTFS file */
 	total_OsmBeforeRun: 0,            /* Total "ref" carrying stops in Israel, prior to the run */
-	total_OsmAfterRun: 0              /* Total "ref" carrying stops in Israel, after the run (total_OsmBeforeRun+created-deleted) */ 
+	total_OsmAfterRun: 0,             /* Total "ref" carrying stops in Israel, after the run (total_OsmBeforeRun+created-deleted) */ 
+	nonMOT_arabic_name: 0             /* Total non MOT provided names in the "name" tag. */
 	//note: total_OsmAfterRun = total_newGTFS + ddx_nothing (ref carrying stops that aren't from gtfs DB)
 }
 
@@ -704,9 +705,19 @@ function busStopUpdate(stop, isCreated)
 	if ((mapName !== undefined) && (mapName.search(/[\u0600-\u06FF]/) !== -1)) // at least 1 ar letter
 		mapNameIsArabic = true;
 	var hasTouched;
-	if ((mapNameIsArabic) && (stop.newEntry["name:ar"] !== undefined) && (stop.newEntry["name:ar"] !== null) && (stop.newEntry["name:ar"] !== ""))
+	if (mapNameIsArabic)
 	{
-		hasTouched = setRawAndTouched(stop.osmElement, "name", stop.newEntry["name:ar"]);
+		// if MOT has an Arabic name
+		if ((stop.newEntry["name:ar"] !== undefined) && (stop.newEntry["name:ar"] !== null) && (stop.newEntry["name:ar"] !== ""))
+		{
+			hasTouched = setRawAndTouched(stop.osmElement, "name", stop.newEntry["name:ar"]);
+		}
+		else
+		{
+			// do nothing, but log this. 
+			gStats.nonMOT_arabic_name++;
+			print("AR-NAME: " + stop.osmElement.tags["ref"] + ". Has a non-MOT provided Arabic name in the 'name' tag. name="+mapName);
+		}
 	}
 	else
 	{

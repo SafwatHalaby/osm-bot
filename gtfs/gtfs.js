@@ -29,7 +29,8 @@ var VERBOSE_MODE = true;          // set to true to print a line "???_" line for
 var PRINT_CREATE_DELETE = true;   // set to true to print all creations/deletions. Implicitly true if verbose mode is true.
 var PRINT_XXX = false;            // Print xxx_update. Extremely verbose on incremental updates
 var PRINT_UPDATED_TAGS = true;    // Print the precise tags that have changed for updated stops.
-var PRINT_SPACIAL_THRESHOLD = 20; // Print spacial desyncs only if they are larger than this. Overridden positions (<5m) are always printed anyways.
+var PRINT_SPACIAL_THRESHOLD = 20; // Print spacial desyncs only if they are larger than this. Overridden positions (<SNAP_THRESHOLD) are always printed anyways.
+var SNAP_THRESHOLD = 3;           // Override position for stops moved less than this. This is because tiny movements are usually a mapper mistake.
 var DELETE_DEBUG = false;         // Set to true to tag with "DELETE_DEBUG=DELETE_DEBUG" rather than delete nodes.
 var DB_DIR = "/home/osm/openStreetMap/gtfs/"; // The directory where the old and new gtfs files are present.
 // Desync messages are always printed
@@ -714,7 +715,7 @@ function busStopUpdate(stop, isCreated)
 		}
 		else
 		{
-			// do nothing, but log this. 
+			// MOT has no Arabic name, but the map does and it's in the "name" tag. do nothing, but log this. 
 			gStats.nonMOT_arabic_name++;
 			print("AR-NAME: " + stop.osmElement.tags["ref"] + ". Has a non-MOT provided Arabic name in the 'name' tag. name="+mapName);
 		}
@@ -753,7 +754,7 @@ function busStopUpdate(stop, isCreated)
 	if ((stop.newEntry["lat"] != stop.osmElement.lat) || (stop.newEntry["lon"] != stop.osmElement.lon))
 	{
 		var distance = getDistanceFromLatLonInM(stop.newEntry.lat, stop.newEntry.lon, stop.osmElement.lat, stop.osmElement.lon).toFixed(2);
-		if (distance < 5)
+		if (distance < SNAP_THRESHOLD)
 		{
 			// The spacial desync is too small. Usually an unintentional mapper micro-movement. Snap it back to gtfs values. (override)
 			print("SNAP: " + distance + "m: " + stop.osmElement.tags.ref + " spacial desync. osm=("+

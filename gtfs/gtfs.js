@@ -100,7 +100,7 @@ function lineToGtfsEntry(line)
 			{
 				// 0 is for the entire match.
 				gtfsEntry["addr:street"] = rgx[1];
-				gtfsEntry["addr:number"] = rgx[2];
+				gtfsEntry["addr:housenumber"] = rgx[2];
 			}
 			else
 			{

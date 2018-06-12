@@ -4,7 +4,7 @@ Last update: 12 June 2018
 major version: 5
 Typical node fetching query (Overpass API):
 
-[out:xml][timeout:200][bbox:29.5734571,34.1674805,33.4131022,35.925293];
+[out:xml][timeout:200][bbox:29.4013195,33.8818359,33.4131022,36.0791016];
 (area(3601473946); area(3603791785);)->.a;
 (
 	node["name"](if:
@@ -145,6 +145,7 @@ function main()
 	
 	print("");
 	print("### Running script");
+	print("The following errors need human attention:");
 	var layer = josm.layers.get(0);
 	var ds = layer.data;
 	ds.each(function(p) // for each element

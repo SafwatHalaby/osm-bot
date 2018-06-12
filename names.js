@@ -68,6 +68,11 @@ function enOnly(str)
 	(str.search(/[a-zA-Z]/) !== -1); // at least 1 en letter
 }
 
+function numbersOnly(str)
+{
+	return (str.search(/[^0-9\\\/\-\_\;\(\)\{\}\.\s]/) === -1);
+}
+
 function hasInvalidChars(str)
 {
 	return (str.search(/[\u0000-\u001F\u007F]/) !== -1);
@@ -78,9 +83,9 @@ function printErr(p, str)
 {
 	gErrCnt++;
 	var preStr;
-	if (p.isWay) preStr = "http://www.openstreetmap.org/way/" + p.id;
-	else if (p.isNode) preStr = "http://www.openstreetmap.org/node/" + p.id;
-	else if (p.isRelation) preStr = "http://www.openstreetmap.org/relation/" + p.id;
+	if (p.isWay) preStr = "https://www.openstreetmap.org/way/" + p.id;
+	else if (p.isNode) preStr = "https://www.openstreetmap.org/node/" + p.id;
+	else if (p.isRelation) preStr = "https://www.openstreetmap.org/relation/" + p.id;
 	else preStr = p.id;
 	print(preStr + ": " + str);
 }
@@ -114,15 +119,20 @@ var languages = [
 {name: "Arabic", tag: "name:ar", check: arEnOnly, copyCnt: 0}
 ];
 
-var fixmeCnt = 0;
 function addFixme(p, str)
 {
 	str += " Flagged by SafwatHalaby_bot-nameCopy";
-	if (p.tags.fixme === undefined)
+	if ((p.tags.fixme === undefined) || (p.tags.fixme === ""))
 	{
 		p.tags.fixme = str;
-		fixmeCnt++;
+		return true;
 	}
+	else if (p.tags.fixme.indexOf("SafwatHalaby") == -1)
+	{
+		p.tags.fixme = "; " + str;
+		return true;
+	}
+	return false;
 }
 
 function main()
@@ -130,6 +140,9 @@ function main()
 	var modifiedCnt = 0;
 	var totalCnt = 0;
 	var engFixCnt = 0;
+	var mismatchCnt = 0;
+	var fixmeCnt = 0;
+	
 	print("");
 	print("### Running script");
 	var layer = josm.layers.get(0);
@@ -142,7 +155,7 @@ function main()
 		// Basic whitespace fixes for all keys and not just name keys
 		fixWhiteSpace(p);
 
-		// Basic integrity checks for all languages except ar,en,he (no bailout)
+		// Basic integrity checks for all tags except name, name:ar,name:en,name:he
 		for (key in p.tags)
 		{
 			if ((key == "name") || (key == "name:he") || (key == "name:en") || (key == "name:ar")) continue;
@@ -177,42 +190,61 @@ function main()
 			}
 		}
 		
-		if (name !== undefined) // name exists, consider name_to_*
+		if (name !== undefined) // name exists
 		{
 			if (p.tags["noname"] !== undefined) remove(p, "noname");
-
+			
+			// check name integrity
 			if (hasInvalidChars(name))
 			{
 				printErr(p, 'name has non printable characters.');
 				return;
 			}
+			
+			// detect "name" tag's language and consider copying it to name:lang
 			for (var i = 0; i < languages.length; ++i)
 			{
 				var lang = languages[i];
 				var nameLang = p.tags[lang.tag];
 				if (lang.check(name))
 				{
+					// detection succeeded for this language
 					if (nameLang === undefined)
 					{
+						//name:lang does not exist. Copy name to name:lang.
 						p.tags[lang.tag] = name;
 						modifiedCnt++;
 						lang.copyCnt++;
 					}
 					else if (!sameValue(nameLang, name)) // normalized string comparison, ignoring spaces etc
 					{
+						// name:lang already exists but it does not match name.
 						var str = "name, " + lang.tag + " mismatch.";
+						mismatchCnt++;
+						if (addFixme(p, str)) // add only if a fixme isn't already present
+						{
+							fixmeCnt++;
+							str += " Fixme added.";
+						}
+						else
+						{
+							str += " Already has a fixme.";
+						}
 						printErr(p, str);
-						addFixme(p, str);
 					}
 					return;
 				}
 			}
-			printErr(p, "name is not ar,he,en");
+			
+			// If we're here language detection didn't work for any of he, ar, en
+			if (!numbersOnly(name))
+				printErr(p, "name is not ar,he,en");
 		}
 	});
 	print("");
 	print("Total names copies: " + modifiedCnt);
-	print("Total fixmes: " + fixmeCnt);
+	print("Total mismatches: " + mismatchCnt);
+	print("Total fixmes added: " + fixmeCnt);
 	print("Eng bugfixes: " + engFixCnt);
 	var checksum = 0;
 	for (var i = 0; i < languages.length; ++i)

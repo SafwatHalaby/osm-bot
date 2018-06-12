@@ -1,6 +1,6 @@
 /*
 Script page: https://wiki.openstreetmap.org/wiki/User:SafwatHalaby/scripts/nameCopy
-Last update: 20 Dec 2017
+Last update: 12 June 2018
 major version: 5
 Typical node fetching query (Overpass API):
 

@@ -33,6 +33,7 @@ out meta;
 
 var Api = require("josm/api").Api;
 var print = require("josm/util").println;
+var ERR_DEBUG = false;
 
 // custom Remove to fix the bug https://forum.openstreetmap.org/viewtopic.php?id=58375
 var remove;
@@ -50,21 +51,21 @@ var remove;
 })();
 
 // 00A0 is non breaking space
+// 2013 is an EN-DASH
 function heEnOnly(str)
 {
-	return ((str.search(/[^\u00A0\u0020-\u007E\u0590-\u05FF]/) === -1)  // only common symbols and ar letters
+	return ((str.search(/[^\u00A0\u0020-\u007E\u0590-\u05FF\u2013]/) === -1)  // only common symbols and letters
 	&& (str.search(/[\u0590-\u05FF]/) !== -1)); // at least 1 he letter
 }
-
 function arEnOnly(str)
 {
-	return ((str.search(/[^\u00A0\u0020-\u007E\u0600-\u06FF]/) === -1)  // only common symbols and ar letters
+	return ((str.search(/[^\u00A0\u0020-\u007E\u0600-\u06FF\u2013]/) === -1)  // only common symbols and ar letters
 	&& (str.search(/[\u0600-\u06FF]/) !== -1)); // at least 1 ar letter
 }
 
 function enOnly(str)
 {
-	return (str.search(/[^\u00A0\u0020-\u007E]/) === -1) && // Only common symbols and en letters
+	return (str.search(/[^\u00A0\u0020-\u007E\u2013]/) === -1) && // Only common symbols and en letters
 	(str.search(/[a-zA-Z]/) !== -1); // at least 1 en letter
 }
 
@@ -88,6 +89,7 @@ function printErr(p, str)
 	else if (p.isRelation) preStr = "https://www.openstreetmap.org/relation/" + p.id;
 	else preStr = p.id;
 	print(preStr + ": " + str);
+	if (ERR_DEBUG) p.tags["DBG_NAME"] = "HAS_ERROR";
 }
 
 function sameValue(str1, str2)
@@ -107,7 +109,6 @@ function fixWhiteSpace(p)
 		{
 			p.tags[key] = newStr;
 			++gWhiteSpaceFixes;
-			// printErr(p, "Whitespace fixed for " + key);
 		}
 	}
 }

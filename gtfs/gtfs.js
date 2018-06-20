@@ -11,8 +11,10 @@ gMostRecentList: The bot respects the most recent change for these tags, be it a
 gAlwaysAdd:      The bot always adds these constant keys and values.
 others:          The bot never modifies any tags which aren't in any of the lists above.
 */
-var gOverrideList = ["level", "addr:street", "addr:number", "ref", "description"]; // Also implicitly: name, name:ar, name:he, name:en. These are outside the array because they require special treatment.
-var gMostRecentList = [];  // Also implicitly: lat, lon. These are outside the array because they require special treatment.
+STREET_TAG = "addr:street";
+ADDR_TAG = "gtfs:addr:housenumber";
+var gOverrideList = [ADDR_TAG, "ref", "description"]; // Also implicitly: name, name:ar, name:he, name:en. These are outside the array because they require special treatment.
+var gMostRecentList = [STREET_TAG, "level"];  // Also implicitly: lat, lon. These are outside the array because they require special treatment.
 var gAlwaysAdd = [{key: "source", value: "israel_gtfs"}, {key: "public_transport", value: "platform"}, {key: "bus", value: "yes"}];
 
 /* Special tags
@@ -99,12 +101,12 @@ function lineToGtfsEntry(line)
 			if (rgx != null)
 			{
 				// 0 is for the entire match.
-				gtfsEntry["addr:street"] = rgx[1];
-				gtfsEntry["addr:housenumber"] = rgx[2];
+				gtfsEntry[STREET_TAG] = rgx[1];
+				gtfsEntry[ADDR_TAG] = rgx[2];
 			}
 			else
 			{
-				gtfsEntry["addr:street"] = streetAndNumber;
+				gtfsEntry[STREET_TAG] = streetAndNumber;
 			}
 		}
 	}

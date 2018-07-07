@@ -115,6 +115,10 @@ function lineToGtfsEntry(line)
 		gtfsEntry["level"] = descriptionData["קומה"];
 		delete descriptionData["קומה"];
 	}
+	if (descriptionData["רציף"] !== undefined)
+	{
+		delete descriptionData["רציף"]; // TODO better handle retzefeem.
+	}
 	
 	// Any descriptionData leftovers are put into the description tag.
 	var first = true;
